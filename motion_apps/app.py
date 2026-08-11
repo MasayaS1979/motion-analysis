@@ -1,3 +1,6 @@
+Thought process
+Thought process
+python
 import streamlit as st
 
 # =========================
@@ -216,7 +219,8 @@ try:
             label="📄 Download User Guide",
             data=pdf_file.read(),
             file_name="MotionAnalysis_UserGuide.pdf",
-            mime="application/pdf"
+            mime="application/pdf",
+            key="sidebar_download_guide"
         )
 except FileNotFoundError:
     st.sidebar.warning("User Guide PDF not found.")
@@ -295,7 +299,8 @@ with tab_guide:
                 label="📄 Download User Guide",
                 data=pdf_file.read(),
                 file_name="MotionAnalysis_UserGuide.pdf",
-                mime="application/pdf"
+                mime="application/pdf",
+                key="tab_download_guide"
             )
 
         st.success("User Guide is available for download.")
