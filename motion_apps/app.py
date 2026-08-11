@@ -59,22 +59,31 @@ h1, h2, h3 {
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 
-/* Card containers (st.container(border=True)) - scoped to the innermost (leaf) wrapper only, so the outer page-level wrapper is not affected */
-div[data-testid="stVerticalBlockBorderWrapper"]:not(:has(div[data-testid="stVerticalBlockBorderWrapper"])) {
+/* Card containers (st.container(border=True)) - only blocks that contain our explicit marker AND are not an ancestor of another bordered wrapper get styled. Everything else (logo, title, sidebar) is forced borderless. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.analysis-card-marker):not(:has(div[data-testid="stVerticalBlockBorderWrapper"])) {
     background-color: #141414;
     border: 1px solid #2a2a2a !important;
     border-radius: 14px !important;
     transition: border-color 0.2s ease, transform 0.15s ease;
 }
 
-div[data-testid="stVerticalBlockBorderWrapper"]:not(:has(div[data-testid="stVerticalBlockBorderWrapper"])):hover {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.analysis-card-marker):not(:has(div[data-testid="stVerticalBlockBorderWrapper"])):hover {
     border-color: var(--accent) !important;
     transform: translateY(-2px);
 }
 
+div[data-testid="stVerticalBlockBorderWrapper"]:not(:has(.analysis-card-marker)),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stVerticalBlockBorderWrapper"]) {
     border: none !important;
     background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Sidebar: remove any default bordered box around content (e.g. Download User Guide area) */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
+    border: none !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
 }
 
 /* Buttons */
@@ -285,6 +294,7 @@ with tab_analysis:
         for col, item in zip(cols, row_items):
             with col:
                 with st.container(border=True):
+                    st.markdown('<span class="analysis-card-marker"></span>', unsafe_allow_html=True)
                     st.markdown(f"#### {item['icon']} {item['title']}")
                     st.caption(item["desc"])
                     if st.button("開く", key=item["key"], use_container_width=True):
