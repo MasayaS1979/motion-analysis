@@ -343,7 +343,3 @@ with tab_guide:
 
     except FileNotFoundError:
         st.error("MotionAnalysis_UserGuide.pdf が見つかりません。")
-""")
-
-    except FileNotFoundError:
-        st.error("MotionAnalysis_UserGuide.pdf が見つかりません。")
