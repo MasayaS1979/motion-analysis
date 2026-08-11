@@ -1,6 +1,3 @@
-Thought process
-Thought process
-python
 import streamlit as st
 
 # =========================
