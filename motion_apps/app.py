@@ -59,17 +59,22 @@ h1, h2, h3 {
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 
-/* Card containers (st.container(border=True)) */
-div[data-testid="stVerticalBlockBorderWrapper"] {
+/* Card containers (st.container(border=True)) - scoped to cards that contain a button, so other wrapper blocks (logo, layout) are not affected */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(button) {
     background-color: #141414;
     border: 1px solid #2a2a2a !important;
     border-radius: 14px !important;
     transition: border-color 0.2s ease, transform 0.15s ease;
 }
 
-div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(button):hover {
     border-color: var(--accent) !important;
     transform: translateY(-2px);
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"]:not(:has(button)) {
+    border: none !important;
+    background-color: transparent !important;
 }
 
 /* Buttons */
