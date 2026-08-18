@@ -1,4 +1,4 @@
-import streamlit as st
+mport streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -550,11 +550,18 @@ with tab1:
  
     st.markdown("---")
  
+    # === [変更1] Cadence / Step Time の説明を追加 ===
+    st.caption(
+        "**Cadence** は1分間あたりの歩数（歩/分）で、歩行のリズム・速さを表す指標です。"
+        "**Step Time** は1歩（あるHeel Strikeから次のHeel Strikeまで）に要する平均時間（秒）です。"
+    )
+ 
     col1, col2 = st.columns(2)
  
     with col1:
  
         st.metric("Cadence (steps/min)", round(cadence, 1))
+        st.caption("1分間あたりの歩数")
  
     with col2:
  
@@ -562,6 +569,7 @@ with tab1:
             "Step Time (sec)",
             round(step_time, 2) if not np.isnan(step_time) else "N/A"
         )
+        st.caption("1歩あたりの平均時間")
  
     # ==========================================================
     # Phase Summary Table
@@ -804,10 +812,11 @@ with tab2:
     # OpenCap sampling rate (60 Hz)
     time = np.arange(len(df_phase)) / 60
  
+    # === [変更2] Lumbar Extension のグラフを追加（8→9プロット） ===
     fig, ax = plt.subplots(
-        8,
+        9,
         1,
-        figsize=(12, 26)
+        figsize=(12, 29)
     )
  
     # =========================
@@ -937,6 +946,16 @@ with tab2:
     ax[7].set_title("Pelvic Vertical Position")
     ax[7].set_xlabel("Time (s)")
     ax[7].set_ylabel("Position (m)")
+ 
+    # =====================
+    # Lumbar Extension
+    # =====================
+ 
+    ax[8].plot(time, df_phase["lumbar_extension"], linewidth=2, color="magenta")
+ 
+    ax[8].set_title("Lumbar Extension")
+    ax[8].set_xlabel("Time (s)")
+    ax[8].set_ylabel("Angle (deg)")
  
     plt.tight_layout()
  
@@ -1351,28 +1370,44 @@ with tab6:
  
     rotation_variability = df_phase["pelvis_rotation"].std()
  
-    max_hip_rom = max(
-        df_phase["hip_flexion_r"].max() - df_phase["hip_flexion_r"].min(),
+    # === [変更3] Hip / Knee / Ankle ROM を左右別々に算出 ===
+    # (max_hip_rom / max_knee_rom / max_ankle_rom は tab7 の
+    #  Gait Features・Movement Score で従来通り使われるため、
+    #  左右のうち大きい方＝従来の組み合わせ値としても残しています)
+ 
+    max_hip_rom_r = (
+        df_phase["hip_flexion_r"].max() - df_phase["hip_flexion_r"].min()
+    )
+ 
+    max_hip_rom_l = (
         df_phase["hip_flexion_l"].max() - df_phase["hip_flexion_l"].min()
     )
  
-    max_knee_rom = max(
-        df_phase["knee_angle_r"].max() - df_phase["knee_angle_r"].min(),
+    max_hip_rom = max(max_hip_rom_r, max_hip_rom_l)
+ 
+    max_knee_rom_r = (
+        df_phase["knee_angle_r"].max() - df_phase["knee_angle_r"].min()
+    )
+ 
+    max_knee_rom_l = (
         df_phase["knee_angle_l"].max() - df_phase["knee_angle_l"].min()
     )
  
-    max_ankle_rom = max(
-        (
-            df_phase["ankle_angle_r"].quantile(0.95)
-            -
-            df_phase["ankle_angle_r"].quantile(0.05)
-        ),
-        (
-            df_phase["ankle_angle_l"].quantile(0.95)
-            -
-            df_phase["ankle_angle_l"].quantile(0.05)
-        )
+    max_knee_rom = max(max_knee_rom_r, max_knee_rom_l)
+ 
+    max_ankle_rom_r = (
+        df_phase["ankle_angle_r"].quantile(0.95)
+        -
+        df_phase["ankle_angle_r"].quantile(0.05)
     )
+ 
+    max_ankle_rom_l = (
+        df_phase["ankle_angle_l"].quantile(0.95)
+        -
+        df_phase["ankle_angle_l"].quantile(0.05)
+    )
+ 
+    max_ankle_rom = max(max_ankle_rom_r, max_ankle_rom_l)
  
     comparison_df["ROM_Difference_%"] = pd.to_numeric(
         comparison_df["ROM_Difference_%"],
@@ -1418,9 +1453,9 @@ with tab6:
 | 指標 | 説明 |
 |---|---|
 | **Cadence** | 1分間あたりの歩数（steps/min） |
-| **Hip ROM** | 股関節可動域（全フレーム中の最大屈曲角度−最小屈曲角度） |
-| **Knee ROM** | 膝関節可動域 |
-| **Ankle ROM** | 足関節可動域（底屈・背屈） |
+| **Hip ROM (R/L)** | 股関節可動域（右・左それぞれの最大屈曲角度−最小屈曲角度） |
+| **Knee ROM (R/L)** | 膝関節可動域（右・左それぞれ） |
+| **Ankle ROM (R/L)** | 足関節可動域（底屈・背屈、右・左それぞれ） |
 | **Pelvic Tilt ROM** | 骨盤前後傾の可動域 |
 | **Pelvic Rotation ROM** | 骨盤回旋の可動域 |
 | **Pelvic Obliquity ROM** | 骨盤左右傾斜（Pelvic List）の可動域 |
@@ -1429,15 +1464,19 @@ with tab6:
 | **ROM Deviation** | 健常可動域（Healthy ROM）との平均偏差率 |
 """)
  
+    # === [変更3] Hip/Knee/Ankle ROM を左右別々に上下2段で表示 ===
     col1, col2, col3, col4, col5, col6 = st.columns(6)
  
     col1.metric("Cadence", f"{cadence:.1f}")
  
-    col2.metric("Hip ROM", f"{max_hip_rom:.1f}°")
+    col2.metric("Hip ROM (R)", f"{max_hip_rom_r:.1f}°")
+    col2.metric("Hip ROM (L)", f"{max_hip_rom_l:.1f}°")
  
-    col3.metric("Knee ROM", f"{max_knee_rom:.1f}°")
+    col3.metric("Knee ROM (R)", f"{max_knee_rom_r:.1f}°")
+    col3.metric("Knee ROM (L)", f"{max_knee_rom_l:.1f}°")
  
-    col4.metric("Ankle ROM", f"{max_ankle_rom:.1f}°")
+    col4.metric("Ankle ROM (R)", f"{max_ankle_rom_r:.1f}°")
+    col4.metric("Ankle ROM (L)", f"{max_ankle_rom_l:.1f}°")
  
     col5.metric("Pelvic Tilt", f"{pelvis_tilt_rom:.1f}°")
  
@@ -1707,6 +1746,75 @@ with tab6:
             text.set_color("white")
  
         st.pyplot(fig2)
+ 
+        # ======================================
+        # [変更4] Lumbar Motion（専用プロットを新規追加）
+        #
+        # これまで Lumbar Extension のチェックボックスは、Hip/Knee/
+        # Ankle（数十度スケール）と同じ軸を共有する Gait Joint Motion
+        # チャートに1本の線として追加されるだけでした。腰椎伸展の
+        # 変化量はそれらに比べて小さく、同じスケールのグラフでは
+        # 線がほぼ潰れて見え、「チェックしても反映されていない」よう
+        # に見える原因になっていました。Pelvic Motion と同様に専用の
+        # グラフを用意し、チェックを入れると単独で腰椎伸展の波形が
+        # 確認できるようにしました。
+        # ======================================
+ 
+        st.subheader("Lumbar Motion")
+ 
+        fig3, ax3 = plt.subplots(
+            figsize=(15, 4),
+            facecolor="black"
+        )
+ 
+        ax3.set_facecolor("black")
+ 
+        ax3.tick_params(colors="white")
+        ax3.xaxis.label.set_color("white")
+        ax3.yaxis.label.set_color("white")
+        ax3.title.set_color("white")
+ 
+        for spine in ax3.spines.values():
+            spine.set_color("white")
+ 
+        ax3.grid(color="white", alpha=0.25)
+ 
+        if show_lumbar:
+ 
+            ax3.plot(
+                time,
+                df_phase["lumbar_extension"],
+                label="Lumbar Extension",
+                linewidth=2,
+                color="yellow"
+            )
+ 
+            legend3 = ax3.legend(loc="upper right", fontsize=9)
+ 
+            legend3.get_frame().set_facecolor("black")
+            legend3.get_frame().set_edgecolor("white")
+ 
+            for text in legend3.get_texts():
+                text.set_color("white")
+ 
+        else:
+ 
+            ax3.text(
+                0.5,
+                0.5,
+                "左の「Lumbar」→「Extension」にチェックを入れると表示されます",
+                color="white",
+                fontsize=11,
+                ha="center",
+                va="center",
+                transform=ax3.transAxes
+            )
+ 
+        ax3.set_title("Gait Lumbar Motion")
+        ax3.set_xlabel("Time (s)")
+        ax3.set_ylabel("Angle (deg)")
+ 
+        st.pyplot(fig3)
  
     # =========================
     # Joint ROM Summary
@@ -2084,4 +2192,5 @@ with tab7:
         "Overall Score",
         f"{overall_score}/100"
     )
+ 
  
