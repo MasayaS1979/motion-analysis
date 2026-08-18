@@ -191,6 +191,21 @@ df["Phase"] = phases
  
 df_phase = df.copy()
  
+# -------------------------
+# Start / Stop Event
+# (mirrors the Bottom/Standing markers used on the other motion pages:
+# Start = frame of lowest arm elevation, before the raise begins.
+# Stop  = frame where peak elevation (Top) is first reached, i.e. the
+# raising motion has effectively stopped.)
+# -------------------------
+ 
+start_idx = arm_smooth.idxmin()
+ 
+stop_idx = (
+    arm_smooth.iloc[start_idx:]
+    .idxmax()
+)
+ 
 # =========================
 # Phase Summary
 # =========================
@@ -394,6 +409,29 @@ with tab1:
             label=phase
         )
  
+    # -------------------------
+    # Event Markers
+    # -------------------------
+ 
+    ax.axvline(start_idx, color="blue", linestyle="--", linewidth=1.5)
+    ax.axvline(stop_idx, color="orange", linestyle="--", linewidth=1.5)
+ 
+    ax.text(
+        start_idx,
+        arm_smooth.iloc[start_idx],
+        "Start",
+        color="blue",
+        fontsize=9
+    )
+ 
+    ax.text(
+        stop_idx,
+        arm_smooth.iloc[stop_idx],
+        "Stop",
+        color="orange",
+        fontsize=9
+    )
+ 
     ax.set_title("Phase Detection Plot")
     ax.set_xlabel("Frame")
     ax.set_ylabel("Shoulder Flexion Angle (deg)")
@@ -407,6 +445,29 @@ with tab1:
     legend.get_frame().set_edgecolor("white")
  
     st.pyplot(fig)
+ 
+    # -------------------------
+    # Event Information
+    # -------------------------
+ 
+    st.markdown("---")
+ 
+    # === [変更1] Start / Stop の数字が何を意味するかを説明 ===
+    st.caption(
+        "下の数値は、動作データ全体の中で「Start（挙上開始位置）」「Stop（挙上完了・Top到達位置）」と"
+        "判定された**フレーム番号**（何コマ目か）です。OpenCapのサンプリングレートは60Hzのため、"
+        "フレーム番号 ÷ 60 で動作開始からの経過秒数に変換できます。"
+    )
+ 
+    col1, col2 = st.columns(2)
+ 
+    with col1:
+        st.metric("Start（挙上開始のフレーム番号）", start_idx)
+        st.caption(f"動作開始から約 {start_idx / 60:.2f} 秒後")
+ 
+    with col2:
+        st.metric("Stop（挙上完了のフレーム番号）", stop_idx)
+        st.caption(f"動作開始から約 {stop_idx / 60:.2f} 秒後")
  
     # ==========================================================
     # Phase Summary Table
@@ -1227,12 +1288,11 @@ with tab6:
  
     # =========================
     # KPI
+    # === [変更2] Max Shoulder Flexion を左右別々に算出 ===
     # =========================
  
-    max_arm_flexion = max(
-        df_phase["arm_flex_r"].max(),
-        df_phase["arm_flex_l"].max()
-    )
+    max_arm_flexion_r = df_phase["arm_flex_r"].max()
+    max_arm_flexion_l = df_phase["arm_flex_l"].max()
  
     lumbar_compensation = round(
         df_phase["lumbar_extension"].max()
@@ -1248,52 +1308,31 @@ with tab6:
         1
     )
  
-    comparison_df["ROM_Difference_%"] = pd.to_numeric(
-        comparison_df["ROM_Difference_%"],
-        errors="coerce"
-    )
- 
-    overall_deviation = round(
-        comparison_df["ROM_Difference_%"]
-        .abs()
-        .mean(),
-        1
-    )
- 
     st.subheader("Key Metrics")
  
     with st.expander("📖 指標の説明を見る"):
  
+        # === [変更3] ROM Deviation の説明行を削除 ===
         st.markdown("""
 | 指標 | 説明 |
 |---|---|
-| **Max Shoulder Flexion** | 肩関節挙上動作中の最大肩屈曲角度（左右のうち大きい方） |
+| **Shoulder Flexion (R/L)** | 肩関節挙上動作中の最大肩屈曲角度（右・左それぞれ） |
 | **Lumbar Compensation** | 肩を挙上する際に生じる腰椎伸展の変化量。肩の可動域不足を補う代償動作を評価 |
 | **Pelvis Compensation** | 肩挙上動作中の骨盤傾斜変化量。骨盤の姿勢制御・下半身からの代償動作を評価 |
-| **ROM Deviation** | 健常可動域（Healthy ROM）との平均偏差率 |
 """)
  
-    col1, col2, col3, col4 = st.columns(4)
+    # === [変更2] 左右別々の値を上下に積み重ねて表示 / [変更3] ROM Deviation 列を削除 ===
+    col1, col2, col3 = st.columns(3)
  
-    col1.metric(
-        "Max Shoulder Flexion",
-        f"{max_arm_flexion:.1f}°"
-    )
+    with col1:
+        st.metric("Shoulder Flexion (R)", f"{max_arm_flexion_r:.1f}°")
+        st.metric("Shoulder Flexion (L)", f"{max_arm_flexion_l:.1f}°")
  
-    col2.metric(
-        "Lumbar Compensation",
-        f"{lumbar_compensation:.1f}°"
-    )
+    with col2:
+        st.metric("Lumbar Compensation", f"{lumbar_compensation:.1f}°")
  
-    col3.metric(
-        "Pelvis Compensation",
-        f"{pelvis_compensation:.1f}°"
-    )
- 
-    col4.metric(
-        "ROM Deviation",
-        f"{overall_deviation:.1f}%"
-    )
+    with col3:
+        st.metric("Pelvis Compensation", f"{pelvis_compensation:.1f}°")
  
     # =========================
     # Interactive Motion Viewer
@@ -1503,6 +1542,75 @@ with tab6:
             text.set_color("white")
  
         st.pyplot(fig2)
+ 
+        # ======================================
+        # [変更4] Lumbar Motion（専用プロットを新規追加）
+        #
+        # これまで Lumbar Extension のチェックボックスは、上の
+        # Shoulder Flexion（0〜180°）と同じ軸を共有する Arm Flexion
+        # Motion チャートに1本の線として追加されるだけでした。腰椎
+        # 伸展の変化量は数度〜十数度程度と肩関節に比べて非常に小さく、
+        # 同じスケールのグラフでは線がほぼ潰れて見え、「チェックして
+        # も反映されていない」ように見える原因になっていました。
+        # Pelvic Motion と同様に専用のグラフを用意し、チェックを
+        # 入れると単独で腰椎伸展の波形が確認できるようにしました。
+        # ======================================
+ 
+        st.subheader("Lumbar Motion")
+ 
+        fig3, ax3 = plt.subplots(
+            figsize=(15, 4),
+            facecolor="black"
+        )
+ 
+        ax3.set_facecolor("black")
+ 
+        ax3.tick_params(colors="white")
+        ax3.xaxis.label.set_color("white")
+        ax3.yaxis.label.set_color("white")
+        ax3.title.set_color("white")
+ 
+        for spine in ax3.spines.values():
+            spine.set_color("white")
+ 
+        ax3.grid(color="white", alpha=0.25)
+ 
+        if show_lumbar:
+ 
+            ax3.plot(
+                time,
+                df_phase["lumbar_extension"],
+                label="Lumbar Extension",
+                linewidth=2,
+                color="yellow"
+            )
+ 
+            legend3 = ax3.legend(loc="upper right", fontsize=9)
+ 
+            legend3.get_frame().set_facecolor("black")
+            legend3.get_frame().set_edgecolor("white")
+ 
+            for text in legend3.get_texts():
+                text.set_color("white")
+ 
+        else:
+ 
+            ax3.text(
+                0.5,
+                0.5,
+                "左の「Trunk」→「Lumbar Extension」にチェックを入れると表示されます",
+                color="white",
+                fontsize=11,
+                ha="center",
+                va="center",
+                transform=ax3.transAxes
+            )
+ 
+        ax3.set_title("Lumbar Motion")
+        ax3.set_xlabel("Time (s)")
+        ax3.set_ylabel("Angle (deg)")
+ 
+        st.pyplot(fig3)
  
     # =========================
     # Joint ROM Summary
@@ -1873,4 +1981,5 @@ with tab7:
         "Overall Score",
         f"{overall_score}/100"
     )
+ 
  
