@@ -716,13 +716,22 @@ with tab1:
  
     st.markdown("---")
  
+    # === [変更1] Sitting / Standing の数字が何を意味するかを説明 ===
+    st.caption(
+        "下の数値は、動作データ全体の中で「Sitting（着座位）」「Standing（立位）」と判定された"
+        "**フレーム番号**（何コマ目か）です。OpenCapのサンプリングレートは60Hzのため、"
+        "フレーム番号 ÷ 60 で動作開始からの経過秒数に変換できます。"
+    )
+ 
     col1, col2 = st.columns(2)
  
     with col1:
-        st.metric("Sitting", sitting_idx)
+        st.metric("Sitting（着座位のフレーム番号）", sitting_idx)
+        st.caption(f"動作開始から約 {sitting_idx / 60:.2f} 秒後")
  
     with col2:
-        st.metric("Standing", standing_idx)
+        st.metric("Standing（立位のフレーム番号）", standing_idx)
+        st.caption(f"動作開始から約 {standing_idx / 60:.2f} 秒後")
  
     # ==========================================================
     # Phase Summary Table
@@ -997,18 +1006,22 @@ with tab2:
         )
  
     # =====================
-    # Knee
+    # [変更2] 表示順を Hip → Knee → Ankle に変更
+    # =====================
+ 
+    # =====================
+    # Hip
     # =====================
  
     ax[0].plot(
         time,
-        df_phase[KNEE],
+        df_phase[HIP],
         linewidth=2,
-        label=f"{ANALYSIS_SIDE} Knee"
+        label=f"{ANALYSIS_SIDE} Hip"
     )
  
     ax[0].set_title(
-        "Knee Angle"
+        "Hip Flexion"
     )
  
     ax[0].set_xlabel(
@@ -1036,18 +1049,18 @@ with tab2:
         )
  
     # =====================
-    # Hip
+    # Knee
     # =====================
  
     ax[1].plot(
         time,
-        df_phase[HIP],
+        df_phase[KNEE],
         linewidth=2,
-        label=f"{ANALYSIS_SIDE} Hip"
+        label=f"{ANALYSIS_SIDE} Knee"
     )
  
     ax[1].set_title(
-        "Hip Flexion"
+        "Knee Angle"
     )
  
     ax[1].set_xlabel(
@@ -1530,14 +1543,19 @@ with tab6:
  
     # =========================
     # KPI
-    # (uses the analyzed side only, matching the rest of the page)
+    # === [変更3] Max ROM (Knee/Hip/Ankle) を左右別々に算出 ===
+    # (解析対象側だけでなく、左右両方の生データから算出。
+    #  どちらが解析対象側かはページ上部のバッジで確認できます)
     # =========================
  
-    max_knee = df_phase[KNEE].max()
+    max_knee_r = df_phase["knee_angle_r"].max()
+    max_knee_l = df_phase["knee_angle_l"].max()
  
-    max_hip = df_phase[HIP].max()
+    max_hip_r = df_phase["hip_flexion_r"].max()
+    max_hip_l = df_phase["hip_flexion_l"].max()
  
-    max_ankle = df_phase[ANKLE].max()
+    max_ankle_r = df_phase["ankle_angle_r"].max()
+    max_ankle_l = df_phase["ankle_angle_l"].max()
  
     # =========================
     # Compensation Metrics
@@ -1560,18 +1578,6 @@ with tab6:
         1
     )
  
-    comparison_df["ROM_Difference_%"] = pd.to_numeric(
-        comparison_df["ROM_Difference_%"],
-        errors="coerce"
-    )
- 
-    overall_deviation = round(
-        comparison_df["ROM_Difference_%"]
-        .abs()
-        .mean(),
-        1
-    )
- 
     # =========================
     # Key Metrics
     # =========================
@@ -1582,52 +1588,41 @@ with tab6:
  
     with st.expander("📖 指標の説明を見る"):
  
+        # === [変更4] ROM Deviation の説明行を削除 ===
         st.markdown("""
 | 指標 | 説明 |
 |---|---|
-| **Max Knee Flexion** | 解析対象側の膝関節最大屈曲角度 |
-| **Max Hip Flexion** | 立ち上がり開始時の股関節最大屈曲角度 |
-| **Max Ankle Motion** | 動作中の足関節角度変化量 |
+| **Knee Flexion (R/L)** | 膝関節の最大屈曲角度（右・左それぞれ） |
+| **Hip Flexion (R/L)** | 股関節の最大屈曲角度（右・左それぞれ） |
+| **Ankle Motion (R/L)** | 動作中の足関節角度変化量（右・左それぞれ） |
 | **Lumbar Compensation** | 腰椎伸展の変化量。股関節・足関節の可動性不足を補う代償動作の可能性 |
 | **Pelvis Tilt Compensation** | 骨盤前後傾の変化量。骨盤制御能力の指標 |
-| **ROM Deviation** | 健常可動域（Healthy ROM）との平均偏差率 |
 """)
  
     # =========================
     # KPI Display
+    # [変更3] 左右別々の値を上下に積み重ねて表示 / [変更4] ROM Deviation 列を削除
     # =========================
  
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    col1, col2, col3, col4, col5 = st.columns(5)
  
-    col1.metric(
-        "Max Knee Flexion",
-        f"{max_knee:.1f}°"
-    )
+    with col1:
+        st.metric("Knee Flexion (R)", f"{max_knee_r:.1f}°")
+        st.metric("Knee Flexion (L)", f"{max_knee_l:.1f}°")
  
-    col2.metric(
-        "Max Hip Flexion",
-        f"{max_hip:.1f}°"
-    )
+    with col2:
+        st.metric("Hip Flexion (R)", f"{max_hip_r:.1f}°")
+        st.metric("Hip Flexion (L)", f"{max_hip_l:.1f}°")
  
-    col3.metric(
-        "Max Ankle Motion",
-        f"{max_ankle:.1f}°"
-    )
+    with col3:
+        st.metric("Ankle Motion (R)", f"{max_ankle_r:.1f}°")
+        st.metric("Ankle Motion (L)", f"{max_ankle_l:.1f}°")
  
-    col4.metric(
-        "Lumbar Compensation",
-        f"{lumbar_compensation:.1f}°"
-    )
+    with col4:
+        st.metric("Lumbar Compensation", f"{lumbar_compensation:.1f}°")
  
-    col5.metric(
-        "Pelvis Tilt Compensation",
-        f"{pelvis_tilt_compensation:.1f}°"
-    )
- 
-    col6.metric(
-        "ROM Deviation",
-        f"{overall_deviation:.1f}%"
-    )
+    with col5:
+        st.metric("Pelvis Tilt Compensation", f"{pelvis_tilt_compensation:.1f}°")
  
     # =========================
     # Interactive Motion Viewer
@@ -1895,6 +1890,115 @@ with tab6:
  
         st.pyplot(
             fig2
+        )
+ 
+        # ======================================
+        # [変更5] Lumbar Motion（専用プロットを新規追加）
+        #
+        # これまで Lumbar の「Extension」チェックボックスは、上の
+        # 混雑した Joint Motion チャートに1本の線として追加される
+        # だけで、Hip/Knee/Ankleの角度スケールに埋もれて見えづらく、
+        # 「チェックしても反映されていないように見える」原因になって
+        # いました。Pelvic Motion と同様に専用のグラフを用意し、
+        # チェックを入れると単独で腰椎伸展の波形が確認できるように
+        # しました。
+        # ======================================
+ 
+        st.subheader(
+            "Sit-to-Stand Lumbar Motion"
+        )
+ 
+        fig3, ax3 = plt.subplots(
+            figsize=(15,4),
+            facecolor="black"
+        )
+ 
+        ax3.set_facecolor(
+            "black"
+        )
+ 
+        ax3.tick_params(
+            colors="white"
+        )
+ 
+        ax3.title.set_color(
+            "white"
+        )
+ 
+        ax3.xaxis.label.set_color(
+            "white"
+        )
+ 
+        ax3.yaxis.label.set_color(
+            "white"
+        )
+ 
+        for spine in ax3.spines.values():
+ 
+            spine.set_color(
+                "white"
+            )
+ 
+        ax3.grid(
+            color="white",
+            alpha=0.25
+        )
+ 
+        if show_lumbar:
+ 
+            ax3.plot(
+                time,
+                df_phase["lumbar_extension"],
+                label="Lumbar Extension",
+                linewidth=2,
+                color="yellow"
+            )
+ 
+            legend3 = ax3.legend(
+                loc="upper right"
+            )
+ 
+            legend3.get_frame().set_facecolor(
+                "black"
+            )
+ 
+            legend3.get_frame().set_edgecolor(
+                "white"
+            )
+ 
+            for text in legend3.get_texts():
+ 
+                text.set_color(
+                    "white"
+                )
+ 
+        else:
+ 
+            ax3.text(
+                0.5,
+                0.5,
+                "左の「Lumbar」→「Extension」にチェックを入れると表示されます",
+                color="white",
+                fontsize=11,
+                ha="center",
+                va="center",
+                transform=ax3.transAxes
+            )
+ 
+        ax3.set_title(
+            "Sit-to-Stand Lumbar Motion"
+        )
+ 
+        ax3.set_xlabel(
+            "Time (s)"
+        )
+ 
+        ax3.set_ylabel(
+            "Angle (deg)"
+        )
+ 
+        st.pyplot(
+            fig3
         )
  
     # =========================
