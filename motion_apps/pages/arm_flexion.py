@@ -251,7 +251,9 @@ HEALTHY_ROM = {
     "arm_flex_r": {"min": 160.0, "max": 180.0},
     "arm_flex_l": {"min": 160.0, "max": 180.0},
     "lumbar_extension": {"min": 10.0, "max": 20.0},
-    "pelvis_tilt": {"min": 5.0, "max": 10.0}
+    "pelvis_tilt": {"min": 5.0, "max": 10.0},
+    # TODO: 臨床上の基準値に応じて調整してください（暫定値として0〜10°を設定）
+    "pelvis_rotation": {"min": 0.0, "max": 10.0}
 }
  
 healthy_rom_df = pd.DataFrame([
@@ -871,6 +873,18 @@ with tab2:
  
     st.pyplot(fig)
  
+    # === [変更5] Movement Analysis にも Pelvic Rotation の ROM 数値を明示 ===
+    pelvis_rotation_rom_tab2 = round(
+        df_phase["pelvis_rotation"].max()
+        -
+        df_phase["pelvis_rotation"].min(),
+        1
+    )
+ 
+    st.caption(
+        f"Pelvic Rotation ROM（この動作中の骨盤回旋の可動域）: {pelvis_rotation_rom_tab2:.1f}°"
+    )
+ 
 # =========================
 # Symmetry Analysis
 # =========================
@@ -1308,21 +1322,30 @@ with tab6:
         1
     )
  
+    # === [変更6] Dashboard Key Metrics に Pelvic Rotation (ROM) を追加 ===
+    pelvis_rotation_rom = round(
+        df_phase["pelvis_rotation"].max()
+        -
+        df_phase["pelvis_rotation"].min(),
+        1
+    )
+ 
     st.subheader("Key Metrics")
  
     with st.expander("📖 指標の説明を見る"):
  
-        # === [変更3] ROM Deviation の説明行を削除 ===
+        # === [変更3] ROM Deviation の説明行を削除 / [変更6] Pelvic Rotation の説明行を追加 ===
         st.markdown("""
 | 指標 | 説明 |
 |---|---|
 | **Shoulder Flexion (R/L)** | 肩関節挙上動作中の最大肩屈曲角度（右・左それぞれ） |
 | **Lumbar Compensation** | 肩を挙上する際に生じる腰椎伸展の変化量。肩の可動域不足を補う代償動作を評価 |
 | **Pelvis Compensation** | 肩挙上動作中の骨盤傾斜変化量。骨盤の姿勢制御・下半身からの代償動作を評価 |
+| **Pelvic Rotation (ROM)** | 肩挙上動作中の骨盤回旋角度の変化量。体幹の回旋による代償動作を評価 |
 """)
  
-    # === [変更2] 左右別々の値を上下に積み重ねて表示 / [変更3] ROM Deviation 列を削除 ===
-    col1, col2, col3 = st.columns(3)
+    # === [変更2] 左右別々の値を上下に積み重ねて表示 / [変更3] ROM Deviation 列を削除 / [変更6] Pelvic Rotation 列を追加 ===
+    col1, col2, col3, col4 = st.columns(4)
  
     with col1:
         st.metric("Shoulder Flexion (R)", f"{max_arm_flexion_r:.1f}°")
@@ -1333,6 +1356,9 @@ with tab6:
  
     with col3:
         st.metric("Pelvis Compensation", f"{pelvis_compensation:.1f}°")
+ 
+    with col4:
+        st.metric("Pelvic Rotation (ROM)", f"{pelvis_rotation_rom:.1f}°")
  
     # =========================
     # Interactive Motion Viewer
@@ -1981,5 +2007,4 @@ with tab7:
         "Overall Score",
         f"{overall_score}/100"
     )
- 
  
