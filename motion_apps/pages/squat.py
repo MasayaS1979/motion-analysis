@@ -305,7 +305,13 @@ HEALTHY_ROM = {
     "knee_angle_r": {"min": 90.0, "max": 140.0},
     "knee_angle_l": {"min": 90.0, "max": 140.0},
     "ankle_angle_r": {"min": 15.0, "max": 35.0},
-    "ankle_angle_l": {"min": 15.0, "max": 35.0}
+    "ankle_angle_l": {"min": 15.0, "max": 35.0},
+    # === [変更2] Healthy ROM Comparison に Pelvic Tilt / Pelvic Rotation /
+    # Lumbar Extension を追加。以下は暫定値のため、実際の臨床基準に応じて
+    # 調整してください。 ===
+    "pelvis_tilt": {"min": 5.0, "max": 15.0},
+    "pelvis_rotation": {"min": 0.0, "max": 10.0},
+    "lumbar_extension": {"min": 5.0, "max": 15.0}
 }
  
 healthy_rom_df = pd.DataFrame([
@@ -764,10 +770,12 @@ with tab2:
     # OpenCap sampling rate (60 Hz)
     time = np.arange(len(df_phase)) / 60
  
+    # === [変更6] Pelvic Rotation と Lumbar Extension を追加するため
+    # 7段 → 9段のサブプロットに拡張 ===
     fig, ax = plt.subplots(
-        7,
+        9,
         1,
-        figsize=(12, 24)
+        figsize=(12, 30)
     )
  
     # =========================
@@ -891,6 +899,26 @@ with tab2:
     ax[6].set_title("Pelvic Forward-Backward Position")
     ax[6].set_xlabel("Time (s)")
     ax[6].set_ylabel("Position (m)")
+ 
+    # =====================
+    # [変更6] Pelvic Rotation（新規追加）
+    # =====================
+ 
+    ax[7].plot(time, df_phase["pelvis_rotation"], linewidth=2, color="gold")
+ 
+    ax[7].set_title("Pelvic Rotation")
+    ax[7].set_xlabel("Time (s)")
+    ax[7].set_ylabel("Angle (deg)")
+ 
+    # =====================
+    # [変更6] Lumbar Extension（新規追加）
+    # =====================
+ 
+    ax[8].plot(time, df_phase["lumbar_extension"], linewidth=2, color="deeppink")
+ 
+    ax[8].set_title("Lumbar Extension")
+    ax[8].set_xlabel("Time (s)")
+    ax[8].set_ylabel("Angle (deg)")
  
     plt.tight_layout()
  
@@ -1317,11 +1345,19 @@ with tab6:
         1
     )
  
+    # === [変更7] Dashboard Key Metrics に Pelvic Rotation (ROM) を追加 ===
+    pelvis_rotation_rom = round(
+        df_phase["pelvis_rotation"].max()
+        -
+        df_phase["pelvis_rotation"].min(),
+        1
+    )
+ 
     st.subheader("Key Metrics")
  
     with st.expander("📖 指標の説明を見る"):
  
-        # === [変更4] Overall Deviation の説明行を削除 ===
+        # === [変更4] Overall Deviation の説明行を削除 / [変更7] Pelvic Rotation の説明行を追加 ===
         st.markdown("""
 | 指標 | 説明 |
 |---|---|
@@ -1330,10 +1366,12 @@ with tab6:
 | **Ankle Dorsiflexion (R/L)** | 足関節の最大背屈角度（右・左それぞれ） |
 | **Lumbar Compensation** | 腰椎伸展の変化量。股関節・足関節の可動性不足を補う代償動作の可能性を示唆 |
 | **Pelvic Compensation** | 骨盤傾斜の変化量。骨盤制御能力の指標 |
+| **Pelvic Rotation (ROM)** | 骨盤回旋角度の変化量。体幹の回旋代償を評価 |
 """)
  
-    # === [変更3] 左右別々の値を上下に積み重ねて表示 / [変更4] Overall Deviation 列を削除 ===
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # === [変更3] 左右別々の値を上下に積み重ねて表示 / [変更4] Overall Deviation 列を削除
+    # / [変更7] Pelvic Rotation 列を追加 ===
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
  
     with col1:
         st.metric("Knee Flexion (R)", f"{max_knee_flexion_r:.1f}°")
@@ -1352,6 +1390,9 @@ with tab6:
  
     with col5:
         st.metric("Pelvic Compensation", f"{pelvic_compensation:.1f}°")
+ 
+    with col6:
+        st.metric("Pelvic Rotation (ROM)", f"{pelvis_rotation_rom:.1f}°")
  
     # =========================
     # Interactive Motion Viewer
@@ -2051,5 +2092,4 @@ with tab7:
         f"{overall_score}/100"
     )
  
-
 
