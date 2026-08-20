@@ -246,7 +246,12 @@ HEALTHY_ROM = {
     "knee_angle_l": {"min": 0, "max": 65},
  
     "ankle_angle_r": {"min": -10, "max": 20},
-    "ankle_angle_l": {"min": -10, "max": 20}
+    "ankle_angle_l": {"min": -10, "max": 20},
+ 
+    # NOTE: 以下3項目は暫定値です。臨床基準値に合わせて要調整
+    "pelvis_tilt": {"min": 5.0, "max": 15.0},
+    "pelvis_rotation": {"min": 0.0, "max": 10.0},
+    "lumbar_extension": {"min": 5.0, "max": 15.0}
  
 }
  
