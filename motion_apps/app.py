@@ -38,8 +38,11 @@ header {
     visibility: hidden;
 }
  
-h1 {
+h1, h2, h3, h4, h5, h6, p, li, span, label, small, div {
     color: white !important;
+}
+ 
+h1 {
     font-weight: 700 !important;
 }
  
@@ -48,7 +51,7 @@ h1, h2, h3 {
 }
  
 .app-subtitle {
-    color: #9CA3AF;
+    color: #9CA3AF !important;
     font-size: 1.05rem;
     margin-top: -0.6rem;
     margin-bottom: 1.2rem;
