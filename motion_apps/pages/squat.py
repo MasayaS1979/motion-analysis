@@ -1604,6 +1604,21 @@ with tab6:
                 linewidth=2
             )
  
+        # Lumbar Extension is grouped visually under the Pelvis
+        # section in the left panel, but was previously not drawn
+        # anywhere on this chart — only on the "Joint Motion" chart
+        # above. Draw it here too so checking "Extension" is
+        # reflected in the Pelvic Motion plot itself.
+        if show_lumbar:
+ 
+            ax2.plot(
+                time,
+                df_phase["lumbar_extension"],
+                label="Lumbar Extension",
+                linewidth=2,
+                linestyle="--"
+            )
+ 
         ax2.set_title("Squat Pelvic Motion")
         ax2.set_xlabel("Time (s)")
         ax2.set_ylabel("Angle (deg) / Translation (mm)")
@@ -1958,4 +1973,3 @@ with tab7:
         "Overall Score",
         f"{overall_score}/100"
     )
- 
