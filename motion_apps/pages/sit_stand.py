@@ -320,7 +320,17 @@ HEALTHY_ROM = {
     "knee_angle_r":{"min":85.0,"max":105.0},
     "knee_angle_l":{"min":85.0,"max":105.0},
     "ankle_angle_r":{"min":10.0,"max":20.0},
-    "ankle_angle_l":{"min":10.0,"max":20.0}
+    "ankle_angle_l":{"min":10.0,"max":20.0},
+    # NOTE: pelvis_tilt / pelvis_rotation / lumbar_extension are trunk
+    # "compensation" signals rather than a primary joint ROM — smaller
+    # excursion is generally considered better sit-to-stand form. The
+    # 0-10° band below is a placeholder threshold for "acceptable
+    # compensation" and should be reviewed/adjusted against your own
+    # clinical reference rather than treated as an established
+    # normative range.
+    "pelvis_tilt":{"min":0.0,"max":10.0},
+    "pelvis_rotation":{"min":0.0,"max":10.0},
+    "lumbar_extension":{"min":0.0,"max":10.0}
 }
  
 healthy_rom_df = pd.DataFrame([
@@ -772,9 +782,9 @@ with tab2:
     time = np.arange(len(df_phase)) / 60
  
     fig, ax = plt.subplots(
-        7,
+        8,
         1,
-        figsize=(12, 24)
+        figsize=(12, 27)
     )
  
     # =========================
@@ -943,19 +953,34 @@ with tab2:
     ax[5].set_ylabel("Position (m)")
  
     # =====================
-    # Lumbar Extension
+    # Pelvic Rotation
     # =====================
  
     ax[6].plot(
+        time,
+        df_phase["pelvis_rotation"],
+        linewidth=2,
+        color="yellow"
+    )
+ 
+    ax[6].set_title("Pelvic Rotation")
+    ax[6].set_xlabel("Time (s)")
+    ax[6].set_ylabel("Angle (deg)")
+ 
+    # =====================
+    # Lumbar Extension
+    # =====================
+ 
+    ax[7].plot(
         time,
         df_phase["lumbar_extension"],
         linewidth=2,
         color="magenta"
     )
  
-    ax[6].set_title("Lumbar Extension")
-    ax[6].set_xlabel("Time (s)")
-    ax[6].set_ylabel("Angle (deg)")
+    ax[7].set_title("Lumbar Extension")
+    ax[7].set_xlabel("Time (s)")
+    ax[7].set_ylabel("Angle (deg)")
  
     plt.tight_layout()
  
@@ -1577,20 +1602,14 @@ with tab6:
     # KPI
     # =========================
  
-    max_knee = max(
-        df_phase["knee_angle_r"].max(),
-        df_phase["knee_angle_l"].max()
-    )
+    max_knee_r = df_phase["knee_angle_r"].max()
+    max_knee_l = df_phase["knee_angle_l"].max()
  
-    max_hip = max(
-        df_phase["hip_flexion_r"].max(),
-        df_phase["hip_flexion_l"].max()
-    )
+    max_hip_r = df_phase["hip_flexion_r"].max()
+    max_hip_l = df_phase["hip_flexion_l"].max()
  
-    max_ankle = max(
-        df_phase["ankle_angle_r"].max(),
-        df_phase["ankle_angle_l"].max()
-    )
+    max_ankle_r = df_phase["ankle_angle_r"].max()
+    max_ankle_l = df_phase["ankle_angle_l"].max()
  
     lumbar_compensation = round(
         df_phase["lumbar_extension"].max()
@@ -1606,15 +1625,10 @@ with tab6:
         1
     )
  
-    comparison_df["ROM_Difference_%"] = pd.to_numeric(
-        comparison_df["ROM_Difference_%"],
-        errors="coerce"
-    )
- 
-    overall_deviation = round(
-        comparison_df["ROM_Difference_%"]
-        .abs()
-        .mean(),
+    pelvis_rotation_rom = round(
+        df_phase["pelvis_rotation"].max()
+        -
+        df_phase["pelvis_rotation"].min(),
         1
     )
  
@@ -1626,36 +1640,53 @@ with tab6:
  
         st.markdown(t("sit_stand.metrics_table"))
  
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    row1_col1, row1_col2, row1_col3, row1_col4, row1_col5, row1_col6 = st.columns(6)
  
-    col1.metric(
-        "Max Knee Flexion",
-        f"{max_knee:.1f}°"
+    row1_col1.metric(
+        "Max Hip Flexion (R)",
+        f"{max_hip_r:.1f}°"
     )
  
-    col2.metric(
-        "Max Hip Flexion",
-        f"{max_hip:.1f}°"
+    row1_col2.metric(
+        "Max Hip Flexion (L)",
+        f"{max_hip_l:.1f}°"
     )
  
-    col3.metric(
-        "Max Ankle Motion",
-        f"{max_ankle:.1f}°"
+    row1_col3.metric(
+        "Max Knee Flexion (R)",
+        f"{max_knee_r:.1f}°"
     )
  
-    col4.metric(
+    row1_col4.metric(
+        "Max Knee Flexion (L)",
+        f"{max_knee_l:.1f}°"
+    )
+ 
+    row1_col5.metric(
+        "Max Ankle Motion (R)",
+        f"{max_ankle_r:.1f}°"
+    )
+ 
+    row1_col6.metric(
+        "Max Ankle Motion (L)",
+        f"{max_ankle_l:.1f}°"
+    )
+ 
+    row2_col1, row2_col2, row2_col3 = st.columns(3)
+ 
+    row2_col1.metric(
         "Lumbar Compensation",
         f"{lumbar_compensation:.1f}°"
     )
  
-    col5.metric(
+    row2_col2.metric(
         "Pelvis Compensation",
         f"{pelvis_compensation:.1f}°"
     )
  
-    col6.metric(
-        "ROM Deviation",
-        f"{overall_deviation:.1f}%"
+    row2_col3.metric(
+        "Pelvic Rotation",
+        f"{pelvis_rotation_rom:.1f}°"
     )
  
     # =========================
@@ -1992,6 +2023,20 @@ with tab6:
                 time,
                 df_phase["pelvis_tz"]*1000,
                 label="Anterior-Posterior (mm)"
+            )
+ 
+        # Lumbar Extension is grouped visually under the Pelvis
+        # section in the left panel, but was previously not drawn
+        # anywhere on this chart — only on the "Joint Motion" chart
+        # above. Draw it here too so checking "Extension" is
+        # reflected in the Pelvic Motion plot itself.
+        if show_lumbar:
+ 
+            ax2.plot(
+                time,
+                df_phase["lumbar_extension"],
+                label="Lumbar Extension",
+                linestyle="--"
             )
  
         ax2.set_title(
@@ -2634,5 +2679,4 @@ with tab7:
         f"{overall_score}/100"
  
     )
- 
  
