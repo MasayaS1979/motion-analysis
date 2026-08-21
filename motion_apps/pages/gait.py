@@ -7,8 +7,11 @@ import io
 from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
+from i18n import t, language_switcher
  
 st.set_page_config(page_title="Gait Analysis", layout="wide")
+ 
+language_switcher()
  
 # =========================
 # Dark Theme CSS
@@ -88,7 +91,7 @@ st.title("Gait Analysis")
 uploaded_file = st.session_state.get("uploaded_file")
  
 if uploaded_file is None:
-    st.warning("Please upload file from Home page")
+    st.warning(t("common.upload_warning"))
     st.stop()
  
 # =========================
@@ -246,12 +249,7 @@ HEALTHY_ROM = {
     "knee_angle_l": {"min": 0, "max": 65},
  
     "ankle_angle_r": {"min": -10, "max": 20},
-    "ankle_angle_l": {"min": -10, "max": 20},
- 
-    # NOTE: 以下3項目は暫定値です。臨床基準値に合わせて要調整
-    "pelvis_tilt": {"min": 5.0, "max": 15.0},
-    "pelvis_rotation": {"min": 0.0, "max": 10.0},
-    "lumbar_extension": {"min": 5.0, "max": 15.0}
+    "ankle_angle_l": {"min": -10, "max": 20}
  
 }
  
@@ -453,9 +451,7 @@ with tab1:
  
     st.subheader("Gait Phase Detection Plot")
  
-    st.caption(
-        "右脚・左脚の歩行フェーズ（Heel Strike・Mid Stance・Toe Off・Swing）を時系列で可視化したグラフです。"
-    )
+    st.caption(t("gait.phase_caption"))
  
     colors_phase = {
  
@@ -555,18 +551,11 @@ with tab1:
  
     st.markdown("---")
  
-    # === [変更1] Cadence / Step Time の説明を追加 ===
-    st.caption(
-        "**Cadence** は1分間あたりの歩数（歩/分）で、歩行のリズム・速さを表す指標です。"
-        "**Step Time** は1歩（あるHeel Strikeから次のHeel Strikeまで）に要する平均時間（秒）です。"
-    )
- 
     col1, col2 = st.columns(2)
  
     with col1:
  
         st.metric("Cadence (steps/min)", round(cadence, 1))
-        st.caption("1分間あたりの歩数")
  
     with col2:
  
@@ -574,7 +563,6 @@ with tab1:
             "Step Time (sec)",
             round(step_time, 2) if not np.isnan(step_time) else "N/A"
         )
-        st.caption("1歩あたりの平均時間")
  
     # ==========================================================
     # Phase Summary Table
@@ -582,19 +570,9 @@ with tab1:
  
     st.subheader("Phase Summary Table")
  
-    st.caption(
-        "各フェーズにおける各関節の最小値、最大値、平均値、標準偏差、可動域（ROM）を算出します。"
-    )
+    st.caption(t("common.phase_summary_caption"))
  
-    st.markdown("""
-**各指標の説明**
- 
-- **Min**：各フェーズにおける最小値
-- **Max**：各フェーズにおける最大値
-- **Mean**：各フェーズにおける平均値
-- **Std**：各フェーズにおける標準偏差
-- **ROM**：Range of Motion（Max − Min）
-""")
+    st.markdown(t("common.phase_metric_explanation"))
  
     st.dataframe(
         phase_summary_df,
@@ -810,18 +788,15 @@ with tab2:
  
     st.subheader("Joint Time Series")
  
-    st.caption(
-        "各関節運動および骨盤運動の時系列変化を表示します。"
-    )
+    st.caption(t("gait.movement_analysis_caption"))
  
     # OpenCap sampling rate (60 Hz)
     time = np.arange(len(df_phase)) / 60
  
-    # === [変更2] Lumbar Extension のグラフを追加（8→9プロット） ===
     fig, ax = plt.subplots(
-        9,
+        8,
         1,
-        figsize=(12, 29)
+        figsize=(12, 26)
     )
  
     # =========================
@@ -952,16 +927,6 @@ with tab2:
     ax[7].set_xlabel("Time (s)")
     ax[7].set_ylabel("Position (m)")
  
-    # =====================
-    # Lumbar Extension
-    # =====================
- 
-    ax[8].plot(time, df_phase["lumbar_extension"], linewidth=2, color="magenta")
- 
-    ax[8].set_title("Lumbar Extension")
-    ax[8].set_xlabel("Time (s)")
-    ax[8].set_ylabel("Angle (deg)")
- 
     plt.tight_layout()
  
     st.pyplot(fig)
@@ -974,9 +939,7 @@ with tab3:
  
     st.subheader("Phase Symmetry")
  
-    st.caption(
-        "左右関節ROMの左右差を各歩行フェーズごとに評価します。"
-    )
+    st.caption(t("gait.symmetry_caption"))
  
     joints = {
  
@@ -1160,13 +1123,9 @@ with tab3:
  
     st.subheader("Healthy ROM Comparison")
  
-    st.caption(
-        "正常可動域（Healthy ROM）との比較を行います。"
-    )
+    st.caption(t("common.healthy_rom_caption"))
  
-    st.caption(
-        "Difference% = Subject ROM と Healthy ROM中央値との差"
-    )
+    st.caption(t("common.difference_pct_caption"))
  
     fig = go.Figure(
  
@@ -1363,9 +1322,7 @@ with tab6:
  
     st.title("Gait Dashboard")
  
-    st.caption(
-        "歩行動作の主要指標を一覧表示します。"
-    )
+    st.caption(t("gait.dashboard_caption"))
  
     # =========================
     # Gait Feature Calculation
@@ -1375,44 +1332,28 @@ with tab6:
  
     rotation_variability = df_phase["pelvis_rotation"].std()
  
-    # === [変更3] Hip / Knee / Ankle ROM を左右別々に算出 ===
-    # (max_hip_rom / max_knee_rom / max_ankle_rom は tab7 の
-    #  Gait Features・Movement Score で従来通り使われるため、
-    #  左右のうち大きい方＝従来の組み合わせ値としても残しています)
- 
-    max_hip_rom_r = (
-        df_phase["hip_flexion_r"].max() - df_phase["hip_flexion_r"].min()
-    )
- 
-    max_hip_rom_l = (
+    max_hip_rom = max(
+        df_phase["hip_flexion_r"].max() - df_phase["hip_flexion_r"].min(),
         df_phase["hip_flexion_l"].max() - df_phase["hip_flexion_l"].min()
     )
  
-    max_hip_rom = max(max_hip_rom_r, max_hip_rom_l)
- 
-    max_knee_rom_r = (
-        df_phase["knee_angle_r"].max() - df_phase["knee_angle_r"].min()
-    )
- 
-    max_knee_rom_l = (
+    max_knee_rom = max(
+        df_phase["knee_angle_r"].max() - df_phase["knee_angle_r"].min(),
         df_phase["knee_angle_l"].max() - df_phase["knee_angle_l"].min()
     )
  
-    max_knee_rom = max(max_knee_rom_r, max_knee_rom_l)
- 
-    max_ankle_rom_r = (
-        df_phase["ankle_angle_r"].quantile(0.95)
-        -
-        df_phase["ankle_angle_r"].quantile(0.05)
+    max_ankle_rom = max(
+        (
+            df_phase["ankle_angle_r"].quantile(0.95)
+            -
+            df_phase["ankle_angle_r"].quantile(0.05)
+        ),
+        (
+            df_phase["ankle_angle_l"].quantile(0.95)
+            -
+            df_phase["ankle_angle_l"].quantile(0.05)
+        )
     )
- 
-    max_ankle_rom_l = (
-        df_phase["ankle_angle_l"].quantile(0.95)
-        -
-        df_phase["ankle_angle_l"].quantile(0.05)
-    )
- 
-    max_ankle_rom = max(max_ankle_rom_r, max_ankle_rom_l)
  
     comparison_df["ROM_Difference_%"] = pd.to_numeric(
         comparison_df["ROM_Difference_%"],
@@ -1452,36 +1393,19 @@ with tab6:
  
     st.subheader("Key Metrics")
  
-    with st.expander("📖 指標の説明を見る"):
+    with st.expander(t("common.metrics_expander_label")):
  
-        st.markdown("""
-| 指標 | 説明 |
-|---|---|
-| **Cadence** | 1分間あたりの歩数（steps/min） |
-| **Hip ROM (R/L)** | 股関節可動域（右・左それぞれの最大屈曲角度−最小屈曲角度） |
-| **Knee ROM (R/L)** | 膝関節可動域（右・左それぞれ） |
-| **Ankle ROM (R/L)** | 足関節可動域（底屈・背屈、右・左それぞれ） |
-| **Pelvic Tilt ROM** | 骨盤前後傾の可動域 |
-| **Pelvic Rotation ROM** | 骨盤回旋の可動域 |
-| **Pelvic Obliquity ROM** | 骨盤左右傾斜（Pelvic List）の可動域 |
-| **Pelvic ML Stability** | 骨盤左右方向の安定性（pelvis_txの標準偏差） |
-| **Lumbar Extension ROM** | 腰椎伸展の可動域 |
-| **ROM Deviation** | 健常可動域（Healthy ROM）との平均偏差率 |
-""")
+        st.markdown(t("gait.metrics_table"))
  
-    # === [変更3] Hip/Knee/Ankle ROM を左右別々に上下2段で表示 ===
     col1, col2, col3, col4, col5, col6 = st.columns(6)
  
     col1.metric("Cadence", f"{cadence:.1f}")
  
-    col2.metric("Hip ROM (R)", f"{max_hip_rom_r:.1f}°")
-    col2.metric("Hip ROM (L)", f"{max_hip_rom_l:.1f}°")
+    col2.metric("Hip ROM", f"{max_hip_rom:.1f}°")
  
-    col3.metric("Knee ROM (R)", f"{max_knee_rom_r:.1f}°")
-    col3.metric("Knee ROM (L)", f"{max_knee_rom_l:.1f}°")
+    col3.metric("Knee ROM", f"{max_knee_rom:.1f}°")
  
-    col4.metric("Ankle ROM (R)", f"{max_ankle_rom_r:.1f}°")
-    col4.metric("Ankle ROM (L)", f"{max_ankle_rom_l:.1f}°")
+    col4.metric("Ankle ROM", f"{max_ankle_rom:.1f}°")
  
     col5.metric("Pelvic Tilt", f"{pelvis_tilt_rom:.1f}°")
  
@@ -1501,9 +1425,7 @@ with tab6:
  
     st.subheader("Interactive Motion Viewer")
  
-    st.caption(
-        "💡 左のチェックボックスで、表示する下肢関節・骨盤・腰椎の指標を選択できます。"
-    )
+    st.caption(t("gait.checkbox_instruction"))
  
     left_col, right_col = st.columns([1.2, 4])
  
@@ -1752,94 +1674,15 @@ with tab6:
  
         st.pyplot(fig2)
  
-        # ======================================
-        # [変更4] Lumbar Motion（専用プロットを新規追加）
-        #
-        # これまで Lumbar Extension のチェックボックスは、Hip/Knee/
-        # Ankle（数十度スケール）と同じ軸を共有する Gait Joint Motion
-        # チャートに1本の線として追加されるだけでした。腰椎伸展の
-        # 変化量はそれらに比べて小さく、同じスケールのグラフでは
-        # 線がほぼ潰れて見え、「チェックしても反映されていない」よう
-        # に見える原因になっていました。Pelvic Motion と同様に専用の
-        # グラフを用意し、チェックを入れると単独で腰椎伸展の波形が
-        # 確認できるようにしました。
-        # ======================================
- 
-        st.subheader("Lumbar Motion")
- 
-        fig3, ax3 = plt.subplots(
-            figsize=(15, 4),
-            facecolor="black"
-        )
- 
-        ax3.set_facecolor("black")
- 
-        ax3.tick_params(colors="white")
-        ax3.xaxis.label.set_color("white")
-        ax3.yaxis.label.set_color("white")
-        ax3.title.set_color("white")
- 
-        for spine in ax3.spines.values():
-            spine.set_color("white")
- 
-        ax3.grid(color="white", alpha=0.25)
- 
-        if show_lumbar:
- 
-            ax3.plot(
-                time,
-                df_phase["lumbar_extension"],
-                label="Lumbar Extension",
-                linewidth=2,
-                color="yellow"
-            )
- 
-            legend3 = ax3.legend(loc="upper right", fontsize=9)
- 
-            legend3.get_frame().set_facecolor("black")
-            legend3.get_frame().set_edgecolor("white")
- 
-            for text in legend3.get_texts():
-                text.set_color("white")
- 
-        else:
- 
-            ax3.text(
-                0.5,
-                0.5,
-                "左の「Lumbar」→「Extension」にチェックを入れると表示されます",
-                color="white",
-                fontsize=11,
-                ha="center",
-                va="center",
-                transform=ax3.transAxes
-            )
- 
-        ax3.set_title("Gait Lumbar Motion")
-        ax3.set_xlabel("Time (s)")
-        ax3.set_ylabel("Angle (deg)")
- 
-        st.pyplot(fig3)
- 
     # =========================
     # Joint ROM Summary
     # =========================
  
     st.subheader("Joint ROM Summary")
  
-    with st.expander("📖 Joint ROMとは"):
+    with st.expander(t("common.joint_rom_expander_label")):
  
-        st.markdown("""
-歩行周期（Gait Cycle）全体において各関節がどの程度動いたかを示す指標です。
- 
-**ROM = 最大関節角度 − 最小関節角度**
- 
-| 関節 | 評価内容 |
-|---|---|
-| **Hip** | 歩行中の股関節屈曲・伸展運動の可動範囲 |
-| **Knee** | 歩行中の膝関節屈曲・伸展運動の可動範囲 |
-| **Ankle** | 歩行中の足関節運動（底屈・背屈）の可動範囲 |
-""")
+        st.markdown(t("gait.joint_rom_content"))
  
     rom_joints = {
  
@@ -1905,14 +1748,9 @@ with tab6:
  
     st.subheader("Joint Asymmetry")
  
-    with st.expander("📖 Joint Asymmetryとは"):
+    with st.expander(t("common.joint_asymmetry_expander_label")):
  
-        st.markdown("""
-左右の関節可動域（ROM）の差を、大きい方のROMで正規化しパーセント表示した指標です。
- 
-- **15%以下** — 左右対称。バランスの取れた歩行パターン
-- **15%超** — 左右差あり。筋力差・可動域制限・荷重偏位・歩行時の代償動作の可能性
-""")
+        st.markdown(t("gait.joint_asymmetry_content"))
  
     gait_asymmetry_joints = {
  
@@ -2009,22 +1847,11 @@ with tab7:
  
     st.subheader("Gait Features")
  
-    st.caption(
-        "歩行リズム・時間的パラメータ・骨盤制御能力から歩行動作を評価する特徴量です。"
-    )
+    st.caption(t("gait.feature_caption"))
  
-    with st.expander("📖 特徴量の説明を見る"):
+    with st.expander(t("common.feature_expander_label")):
  
-        st.markdown("""
-| 特徴量 | 説明 |
-|---|---|
-| **Cadence** | 1分間あたりの歩数（steps/min） |
-| **Step Time** | 1歩に要する時間（sec） |
-| **Pelvic Stability** | 歩行中の骨盤側方傾斜（pelvis_list）の変動性（標準偏差） |
-| **Pelvic Rotation Variability** | 歩行中の骨盤回旋（pelvis_rotation）の変動性 |
-| **Hip / Knee / Ankle ROM** | 各関節の可動域 |
-| **Lumbar Extension ROM** | 歩行中の腰椎伸展運動範囲 |
-""")
+        st.markdown(t("gait.feature_table"))
  
     gait_feature_df = pd.DataFrame({
  
@@ -2169,33 +1996,14 @@ with tab7:
  
     st.subheader("Movement Score")
  
-    st.caption(
-        "左右対称性・歩行リズム・骨盤安定性・体幹代償動作・関節可動性の5要素から算出する100点満点の総合スコアです。"
-    )
+    st.caption(t("gait.score_caption"))
  
-    with st.expander("📖 スコアの算出方法を見る"):
+    with st.expander(t("common.score_expander_label")):
  
-        st.markdown("""
-**Overall Score = Symmetry×0.25 + Cadence×0.15 + Pelvic ML×0.20 + Lumbar Extension×0.15 + Mobility×0.25**
- 
-| 要素 | 重み | 算出元 |
-|---|---|---|
-| **Symmetry Score** | 25% | 股関節・膝関節・足関節の左右ROM差の平均値 |
-| **Cadence Score** | 15% | 基準Cadence（110 steps/min）との差 |
-| **Pelvic ML Stability Score** | 20% | 骨盤左右傾斜（pelvis_list）の変動性 |
-| **Lumbar Extension Score** | 15% | 腰椎伸展量が基準値（10°）からどれだけ離れているか |
-| **Mobility Score** | 25% | 股・膝・足関節ROMの総合的な可動性 |
- 
-**スコアの目安**
- 
-- **90〜100** — Excellent
-- **70〜89** — Good
-- **70未満** — 歩行能力や運動機能の低下が示唆される
-""")
+        st.markdown(t("gait.score_content"))
  
     st.metric(
         "Overall Score",
         f"{overall_score}/100"
     )
- 
  
