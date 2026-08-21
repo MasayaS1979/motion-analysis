@@ -7,8 +7,11 @@ import io
 from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
+from i18n import t, language_switcher
  
 st.set_page_config(page_title="Sit_Stand Analysis", layout="wide")
+ 
+language_switcher()
  
 # =========================
 # Dark Theme CSS
@@ -88,7 +91,7 @@ st.title("Sit_Stand Analysis")
 uploaded_file = st.session_state.get("uploaded_file")
  
 if uploaded_file is None:
-    st.warning("Please upload file from Home page")
+    st.warning(t("common.upload_warning"))
     st.stop()
  
 # =========================
@@ -317,13 +320,7 @@ HEALTHY_ROM = {
     "knee_angle_r":{"min":85.0,"max":105.0},
     "knee_angle_l":{"min":85.0,"max":105.0},
     "ankle_angle_r":{"min":10.0,"max":20.0},
-    "ankle_angle_l":{"min":10.0,"max":20.0},
-    # === Healthy ROM Comparison に Pelvic Tilt / Pelvic Rotation /
-    # Lumbar Extension を追加。以下は暫定値のため、実際の臨床基準に応じて
-    # 調整してください。 ===
-    "pelvis_tilt":{"min":5.0,"max":15.0},
-    "pelvis_rotation":{"min":0.0,"max":10.0},
-    "lumbar_extension":{"min":5.0,"max":15.0}
+    "ankle_angle_l":{"min":10.0,"max":20.0}
 }
  
 healthy_rom_df = pd.DataFrame([
@@ -425,9 +422,7 @@ with tab1:
  
     st.subheader("Phase Detection Plot")
  
-    st.caption(
-        "立ち-座位動作中の各フェーズ（Standing・Descending・Bottom・Ascending）を時系列で可視化したグラフです。"
-    )
+    st.caption(t("sit_stand.phase_caption"))
  
     colors_phase = {
         "Standing": "dodgerblue",
@@ -539,22 +534,13 @@ with tab1:
  
     st.markdown("---")
  
-    # === [変更1] Bottom / Standing の数字が何を意味するかを説明 ===
-    st.caption(
-        "下の数値は、動作データ全体の中で「最下点（Bottom）」「立位（Standing）」と判定された"
-        "**フレーム番号**（何コマ目か）です。OpenCapのサンプリングレートは60Hzのため、"
-        "フレーム番号 ÷ 60 で動作開始からの経過秒数に変換できます。"
-    )
- 
     col1, col2 = st.columns(2)
  
     with col1:
-        st.metric("Bottom（最下点のフレーム番号）", bottom_idx)
-        st.caption(f"動作開始から約 {bottom_idx / 60:.2f} 秒後")
+        st.metric("Bottom", bottom_idx)
  
     with col2:
-        st.metric("Standing（立位のフレーム番号）", standing_idx)
-        st.caption(f"動作開始から約 {standing_idx / 60:.2f} 秒後")
+        st.metric("Standing", standing_idx)
  
     # ==========================================================
     # Phase Summary Table
@@ -562,19 +548,9 @@ with tab1:
  
     st.subheader("Phase Summary Table")
  
-    st.caption(
-        "各フェーズにおける各関節の最小値、最大値、平均値、標準偏差、可動域（ROM）を算出します。"
-    )
+    st.caption(t("common.phase_summary_caption"))
  
-    st.markdown("""
-**各指標の説明**
- 
-- **Min**：各フェーズにおける最小値
-- **Max**：各フェーズにおける最大値
-- **Mean**：各フェーズにおける平均値
-- **Std**：各フェーズにおける標準偏差
-- **ROM**：Range of Motion（Max − Min）
-""")
+    st.markdown(t("common.phase_metric_explanation"))
  
     st.dataframe(
         phase_summary_df,
@@ -790,18 +766,15 @@ with tab2:
  
     st.subheader("Joint Time Series")
  
-    st.caption(
-        "各関節運動の時系列変化を表示します。"
-    )
+    st.caption(t("common.joint_time_series_caption"))
  
     # OpenCap sampling rate (60 Hz)
     time = np.arange(len(df_phase)) / 60
  
-    # === [変更6] Pelvic Rotation を追加するため 7段 → 8段のサブプロットに拡張 ===
     fig, ax = plt.subplots(
-        8,
+        7,
         1,
-        figsize=(12, 27)
+        figsize=(12, 24)
     )
  
     # =========================
@@ -835,28 +808,24 @@ with tab2:
         )
  
     # =====================
-    # [変更2] 表示順を Hip → Knee → Ankle に変更
-    # =====================
- 
-    # =====================
-    # Hip
+    # Knee
     # =====================
  
     ax[0].plot(
         time,
-        df_phase["hip_flexion_r"],
+        df_phase["knee_angle_r"],
         label="Right Leg",
         linewidth=2
     )
  
     ax[0].plot(
         time,
-        df_phase["hip_flexion_l"],
+        df_phase["knee_angle_l"],
         label="Left Leg",
         linewidth=2
     )
  
-    ax[0].set_title("Hip ROM")
+    ax[0].set_title("Knee ROM")
     ax[0].set_xlabel("Time (s)")
     ax[0].set_ylabel("Angle (deg)")
  
@@ -869,24 +838,24 @@ with tab2:
         text.set_color("white")
  
     # =====================
-    # Knee
+    # Hip
     # =====================
  
     ax[1].plot(
         time,
-        df_phase["knee_angle_r"],
+        df_phase["hip_flexion_r"],
         label="Right Leg",
         linewidth=2
     )
  
     ax[1].plot(
         time,
-        df_phase["knee_angle_l"],
+        df_phase["hip_flexion_l"],
         label="Left Leg",
         linewidth=2
     )
  
-    ax[1].set_title("Knee ROM")
+    ax[1].set_title("Hip ROM")
     ax[1].set_xlabel("Time (s)")
     ax[1].set_ylabel("Angle (deg)")
  
@@ -988,21 +957,6 @@ with tab2:
     ax[6].set_xlabel("Time (s)")
     ax[6].set_ylabel("Angle (deg)")
  
-    # =====================
-    # [変更6] Pelvic Rotation（新規追加）
-    # =====================
- 
-    ax[7].plot(
-        time,
-        df_phase["pelvis_rotation"],
-        linewidth=2,
-        color="gold"
-    )
- 
-    ax[7].set_title("Pelvic Rotation")
-    ax[7].set_xlabel("Time (s)")
-    ax[7].set_ylabel("Angle (deg)")
- 
     plt.tight_layout()
  
     st.pyplot(fig)
@@ -1018,9 +972,7 @@ with tab3:
         "Phase Symmetry"
     )
  
-    st.caption(
-        "左右関節ROMの左右差を各Phaseごとに評価します。"
-    )
+    st.caption(t("common.symmetry_caption"))
  
     joints = {
  
@@ -1339,13 +1291,9 @@ with tab3:
         "Healthy ROM Comparison"
     )
  
-    st.caption(
-        "正常可動域（Healthy ROM）との比較を行います。"
-    )
+    st.caption(t("common.healthy_rom_caption"))
  
-    st.caption(
-        "Difference% = Subject ROM と Healthy ROM中央値との差"
-    )
+    st.caption(t("common.difference_pct_caption"))
  
     # =========================
     # Plotly Table
@@ -1623,24 +1571,26 @@ with tab6:
         "Sit-to-Stand Dashboard"
     )
  
-    st.caption(
-        "Sit-to-Stand動作の主要指標を表示します"
-    )
+    st.caption(t("sit_stand.dashboard_caption"))
  
     # =========================
     # KPI
     # =========================
  
-    # === [変更3] Max ROM (Knee/Hip/Ankle) を左右別々に算出 ===
+    max_knee = max(
+        df_phase["knee_angle_r"].max(),
+        df_phase["knee_angle_l"].max()
+    )
  
-    max_knee_r = df_phase["knee_angle_r"].max()
-    max_knee_l = df_phase["knee_angle_l"].max()
+    max_hip = max(
+        df_phase["hip_flexion_r"].max(),
+        df_phase["hip_flexion_l"].max()
+    )
  
-    max_hip_r = df_phase["hip_flexion_r"].max()
-    max_hip_l = df_phase["hip_flexion_l"].max()
- 
-    max_ankle_r = df_phase["ankle_angle_r"].max()
-    max_ankle_l = df_phase["ankle_angle_l"].max()
+    max_ankle = max(
+        df_phase["ankle_angle_r"].max(),
+        df_phase["ankle_angle_l"].max()
+    )
  
     lumbar_compensation = round(
         df_phase["lumbar_extension"].max()
@@ -1656,11 +1606,15 @@ with tab6:
         1
     )
  
-    # === [変更7] Dashboard Key Metrics に Pelvic Rotation (ROM) を追加 ===
-    pelvis_rotation_rom = round(
-        df_phase["pelvis_rotation"].max()
-        -
-        df_phase["pelvis_rotation"].min(),
+    comparison_df["ROM_Difference_%"] = pd.to_numeric(
+        comparison_df["ROM_Difference_%"],
+        errors="coerce"
+    )
+ 
+    overall_deviation = round(
+        comparison_df["ROM_Difference_%"]
+        .abs()
+        .mean(),
         1
     )
  
@@ -1668,44 +1622,41 @@ with tab6:
         "Key Metrics"
     )
  
-    with st.expander("📖 指標の説明を見る"):
+    with st.expander(t("common.metrics_expander_label")):
  
-        # === [変更4] ROM Deviation の説明行を削除 / [変更7] Pelvic Rotation の説明行を追加 ===
-        st.markdown("""
-| 指標 | 説明 |
-|---|---|
-| **Knee Flexion (R/L)** | 立ち座り動作中の膝関節最大屈曲角度（右・左それぞれ） |
-| **Hip Flexion (R/L)** | 立ち上がり開始時の股関節最大屈曲角度（右・左それぞれ） |
-| **Ankle Motion (R/L)** | 動作中の足関節角度変化量（右・左それぞれ） |
-| **Lumbar Compensation** | 腰椎伸展の変化量。股関節・足関節の可動性不足を補う代償動作の可能性 |
-| **Pelvis Compensation** | 骨盤前後傾の変化量。骨盤制御能力の指標 |
-| **Pelvic Rotation (ROM)** | 骨盤回旋角度の変化量。体幹の回旋代償を評価 |
-""")
+        st.markdown(t("sit_stand.metrics_table"))
  
-    # === [変更3] 左右別々の値を上下に積み重ねて表示 / [変更4] ROM Deviation 列を削除
-    # / [変更7] Pelvic Rotation 列を追加 ===
     col1, col2, col3, col4, col5, col6 = st.columns(6)
  
-    with col1:
-        st.metric("Knee Flexion (R)", f"{max_knee_r:.1f}°")
-        st.metric("Knee Flexion (L)", f"{max_knee_l:.1f}°")
+    col1.metric(
+        "Max Knee Flexion",
+        f"{max_knee:.1f}°"
+    )
  
-    with col2:
-        st.metric("Hip Flexion (R)", f"{max_hip_r:.1f}°")
-        st.metric("Hip Flexion (L)", f"{max_hip_l:.1f}°")
+    col2.metric(
+        "Max Hip Flexion",
+        f"{max_hip:.1f}°"
+    )
  
-    with col3:
-        st.metric("Ankle Motion (R)", f"{max_ankle_r:.1f}°")
-        st.metric("Ankle Motion (L)", f"{max_ankle_l:.1f}°")
+    col3.metric(
+        "Max Ankle Motion",
+        f"{max_ankle:.1f}°"
+    )
  
-    with col4:
-        st.metric("Lumbar Compensation", f"{lumbar_compensation:.1f}°")
+    col4.metric(
+        "Lumbar Compensation",
+        f"{lumbar_compensation:.1f}°"
+    )
  
-    with col5:
-        st.metric("Pelvis Compensation", f"{pelvis_compensation:.1f}°")
+    col5.metric(
+        "Pelvis Compensation",
+        f"{pelvis_compensation:.1f}°"
+    )
  
-    with col6:
-        st.metric("Pelvic Rotation (ROM)", f"{pelvis_rotation_rom:.1f}°")
+    col6.metric(
+        "ROM Deviation",
+        f"{overall_deviation:.1f}%"
+    )
  
     # =========================
     # Interactive Motion Viewer
@@ -1715,9 +1666,7 @@ with tab6:
         "Interactive Motion Viewer"
     )
  
-    st.caption(
-        "💡 左のチェックボックスで、表示する関節・骨盤・腰椎の指標を選択できます。"
-    )
+    st.caption(t("sit_stand.checkbox_instruction"))
  
     left_col, right_col = st.columns(
         [1.2,4]
@@ -2073,107 +2022,6 @@ with tab6:
             fig2
         )
  
-        # ======================================
-        # [変更5] Lumbar Motion（専用プロットを新規追加）
-        # ======================================
- 
-        st.subheader(
-            "Sit-to-Stand Lumbar Motion"
-        )
- 
-        fig3, ax3 = plt.subplots(
-            figsize=(15,4),
-            facecolor="black"
-        )
- 
-        ax3.set_facecolor(
-            "black"
-        )
- 
-        ax3.tick_params(
-            colors="white"
-        )
- 
-        ax3.title.set_color(
-            "white"
-        )
- 
-        ax3.xaxis.label.set_color(
-            "white"
-        )
- 
-        ax3.yaxis.label.set_color(
-            "white"
-        )
- 
-        for spine in ax3.spines.values():
- 
-            spine.set_color(
-                "white"
-            )
- 
-        ax3.grid(
-            color="white",
-            alpha=0.25
-        )
- 
-        if show_lumbar:
- 
-            ax3.plot(
-                time,
-                df_phase["lumbar_extension"],
-                label="Lumbar Extension",
-                linewidth=2,
-                color="yellow"
-            )
- 
-            legend3 = ax3.legend(
-                loc="upper right"
-            )
- 
-            legend3.get_frame().set_facecolor(
-                "black"
-            )
- 
-            legend3.get_frame().set_edgecolor(
-                "white"
-            )
- 
-            for text in legend3.get_texts():
- 
-                text.set_color(
-                    "white"
-                )
- 
-        else:
- 
-            ax3.text(
-                0.5,
-                0.5,
-                "左の「Lumbar」→「Extension」にチェックを入れると表示されます",
-                color="white",
-                fontsize=11,
-                ha="center",
-                va="center",
-                transform=ax3.transAxes
-            )
- 
-        ax3.set_title(
-            "Sit-to-Stand Lumbar Motion"
-        )
- 
-        ax3.set_xlabel(
-            "Time (s)"
-        )
- 
-        ax3.set_ylabel(
-            "Angle (deg)"
-        )
- 
-        st.pyplot(
-            fig3
-        )
- 
     # =========================
     # Joint ROM Summary
     # =========================
@@ -2182,19 +2030,9 @@ with tab6:
         "Joint ROM Summary"
     )
  
-    with st.expander("📖 Joint ROMとは"):
+    with st.expander(t("common.joint_rom_expander_label")):
  
-        st.markdown("""
-関節が動作中にどれだけ動いたかを示す指標です。
- 
-**ROM = 最大角度 − 最小角度**
- 
-| 関節 | 評価内容 |
-|---|---|
-| **Hip** | 股関節屈曲角度。立ち上がり時の体幹前傾戦略を評価 |
-| **Knee** | 膝関節屈曲量。立ち上がりに必要な下肢運動を評価 |
-| **Ankle** | 足関節運動。足部による重心移動能力を評価 |
-""")
+        st.markdown(t("sit_stand.joint_rom_content"))
  
     rom_joints = {
  
@@ -2314,14 +2152,9 @@ with tab6:
         "Joint Asymmetry"
     )
  
-    with st.expander("📖 Joint Asymmetryとは"):
+    with st.expander(t("common.joint_asymmetry_expander_label")):
  
-        st.markdown("""
-左右の関節可動域（ROM）の差を、大きい方のROMで正規化しパーセント表示した指標です。
- 
-- **15%以下** — 比較的対称な運動パターン
-- **15%超** — 左右荷重差・筋力差・可動性差・代償動作の可能性
-""")
+        st.markdown(t("sit_stand.joint_asymmetry_content"))
  
     asymmetry_joints = {
  
@@ -2513,22 +2346,11 @@ with tab7:
         "Movement Features"
     )
  
-    st.caption(
-        "身体移動・姿勢制御・代償動作・左右差からSit-to-Stand動作を評価する特徴量です。"
-    )
+    st.caption(t("sit_stand.feature_caption"))
  
-    with st.expander("📖 特徴量の説明を見る"):
+    with st.expander(t("common.feature_expander_label")):
  
-        st.markdown("""
-| 特徴量 | 説明 |
-|---|---|
-| **Seat-Off Height** | 骨盤の垂直移動量（立ち上がりの深さ） |
-| **Pelvic Shift** | 骨盤の左右・前後移動量の最大値 |
-| **Lumbar Compensation** | 腰椎伸展の変化量。大きいほど代償動作の可能性 |
-| **Hip Asymmetry** | 左右股関節のROM差（%） |
-| **Knee Asymmetry** | 左右膝関節のROM差（%） |
-| **Ankle Asymmetry** | 左右足関節のROM差（%） |
-""")
+        st.markdown(t("sit_stand.feature_table"))
  
     seat_off_height = (
  
@@ -2799,25 +2621,11 @@ with tab7:
  
     )
  
-    st.caption(
-        "左右対称性・姿勢安定性・代償動作・身体移動能力の4要素から算出する100点満点の総合スコアです。"
-    )
+    st.caption(t("sit_stand.score_caption"))
  
-    with st.expander("📖 スコアの算出方法を見る"):
+    with st.expander(t("common.score_expander_label")):
  
-        st.markdown("""
-**Overall Score = Symmetry×0.30 + Stability×0.30 + Compensation×0.20 + Mobility×0.20**
- 
-| 要素 | 重み | 算出元 |
-|---|---|---|
-| **Symmetry Score** | 30% | 股関節・膝関節・足関節の左右差（Asymmetry）の平均値 |
-| **Stability Score** | 30% | 骨盤の左右・前後移動量（Pelvic Shift） |
-| **Compensation Score** | 20% | 腰椎伸展の変化量（Lumbar Compensation） |
-| **Mobility Score** | 20% | 骨盤垂直移動量（Seat-Off Height） |
- 
-- **高スコア** — 安定した効率的なSit-to-Stand動作
-- **低スコア** — 左右差・姿勢制御低下・代償動作・身体移動能力低下の可能性
-""")
+        st.markdown(t("sit_stand.score_content"))
  
     st.metric(
  
@@ -2826,4 +2634,5 @@ with tab7:
         f"{overall_score}/100"
  
     )
+ 
  
