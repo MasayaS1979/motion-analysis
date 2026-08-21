@@ -239,7 +239,11 @@ HEALTHY_ROM = {
     "arm_flex_r": {"min": 160.0, "max": 180.0},
     "arm_flex_l": {"min": 160.0, "max": 180.0},
     "lumbar_extension": {"min": 10.0, "max": 20.0},
-    "pelvis_tilt": {"min": 5.0, "max": 10.0}
+    "pelvis_tilt": {"min": 5.0, "max": 10.0},
+    # NOTE: like pelvis_tilt above, this is a placeholder "acceptable
+    # compensation" band rather than an established normative range —
+    # adjust to your own clinical reference if you have one.
+    "pelvis_rotation": {"min": 5.0, "max": 10.0}
 }
  
 healthy_rom_df = pd.DataFrame([
@@ -1210,10 +1214,9 @@ with tab6:
     # KPI
     # =========================
  
-    max_arm_flexion = max(
-        df_phase["arm_flex_r"].max(),
-        df_phase["arm_flex_l"].max()
-    )
+    max_arm_flexion_r = df_phase["arm_flex_r"].max()
+ 
+    max_arm_flexion_l = df_phase["arm_flex_l"].max()
  
     lumbar_compensation = round(
         df_phase["lumbar_extension"].max()
@@ -1229,15 +1232,10 @@ with tab6:
         1
     )
  
-    comparison_df["ROM_Difference_%"] = pd.to_numeric(
-        comparison_df["ROM_Difference_%"],
-        errors="coerce"
-    )
- 
-    overall_deviation = round(
-        comparison_df["ROM_Difference_%"]
-        .abs()
-        .mean(),
+    pelvis_rotation_compensation = round(
+        df_phase["pelvis_rotation"].max()
+        -
+        df_phase["pelvis_rotation"].min(),
         1
     )
  
@@ -1247,26 +1245,33 @@ with tab6:
  
         st.markdown(t("arm_flexion.metrics_table"))
  
-    col1, col2, col3, col4 = st.columns(4)
+    row1_col1, row1_col2 = st.columns(2)
  
-    col1.metric(
-        "Max Shoulder Flexion",
-        f"{max_arm_flexion:.1f}°"
+    row1_col1.metric(
+        "Max Shoulder Flexion (R)",
+        f"{max_arm_flexion_r:.1f}°"
     )
  
-    col2.metric(
+    row1_col2.metric(
+        "Max Shoulder Flexion (L)",
+        f"{max_arm_flexion_l:.1f}°"
+    )
+ 
+    row2_col1, row2_col2, row2_col3 = st.columns(3)
+ 
+    row2_col1.metric(
         "Lumbar Compensation",
         f"{lumbar_compensation:.1f}°"
     )
  
-    col3.metric(
+    row2_col2.metric(
         "Pelvis Compensation",
         f"{pelvis_compensation:.1f}°"
     )
  
-    col4.metric(
-        "ROM Deviation",
-        f"{overall_deviation:.1f}%"
+    row2_col3.metric(
+        "Pelvic Rotation",
+        f"{pelvis_rotation_compensation:.1f}°"
     )
  
     # =========================
@@ -1460,6 +1465,21 @@ with tab6:
                 df_phase["pelvis_tz"] * 1000,
                 label="Anterior-Posterior (mm)",
                 linewidth=2
+            )
+ 
+        # Lumbar Extension is grouped visually under "Trunk" in the
+        # left panel, but was previously only drawn on the Arm
+        # Flexion Motion chart above, never here. Draw it here too so
+        # checking "Lumbar Extension" is reflected in the Pelvic
+        # Motion plot itself.
+        if show_lumbar:
+ 
+            ax2.plot(
+                time,
+                df_phase["lumbar_extension"],
+                label="Lumbar Extension",
+                linewidth=2,
+                linestyle="--"
             )
  
         ax2.set_title("Pelvic Motion")
