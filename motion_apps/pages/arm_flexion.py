@@ -7,8 +7,11 @@ import io
 from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
+from i18n import t, language_switcher
  
 st.set_page_config(page_title="Arm Flexion Analysis", layout="wide")
+ 
+language_switcher()
  
 # =========================
 # Dark Theme CSS
@@ -88,7 +91,7 @@ st.title("Arm Flexion Analysis")
 uploaded_file = st.session_state.get("uploaded_file")
  
 if uploaded_file is None:
-    st.warning("Please upload file from Home page")
+    st.warning(t("common.upload_warning"))
     st.stop()
  
 # =========================
@@ -191,21 +194,6 @@ df["Phase"] = phases
  
 df_phase = df.copy()
  
-# -------------------------
-# Start / Stop Event
-# (mirrors the Bottom/Standing markers used on the other motion pages:
-# Start = frame of lowest arm elevation, before the raise begins.
-# Stop  = frame where peak elevation (Top) is first reached, i.e. the
-# raising motion has effectively stopped.)
-# -------------------------
- 
-start_idx = arm_smooth.idxmin()
- 
-stop_idx = (
-    arm_smooth.iloc[start_idx:]
-    .idxmax()
-)
- 
 # =========================
 # Phase Summary
 # =========================
@@ -251,9 +239,7 @@ HEALTHY_ROM = {
     "arm_flex_r": {"min": 160.0, "max": 180.0},
     "arm_flex_l": {"min": 160.0, "max": 180.0},
     "lumbar_extension": {"min": 10.0, "max": 20.0},
-    "pelvis_tilt": {"min": 5.0, "max": 10.0},
-    # TODO: 臨床上の基準値に応じて調整してください（暫定値として0〜10°を設定）
-    "pelvis_rotation": {"min": 0.0, "max": 10.0}
+    "pelvis_tilt": {"min": 5.0, "max": 10.0}
 }
  
 healthy_rom_df = pd.DataFrame([
@@ -355,9 +341,7 @@ with tab1:
  
     st.subheader("Phase Detection Plot")
  
-    st.caption(
-        "肩関節挙上動作（Start・Raising・Top・Lowering）の各フェーズを時系列で表示します。"
-    )
+    st.caption(t("arm_flexion.phase_caption"))
  
     colors_phase = {
         "Start": "blue",
@@ -411,29 +395,6 @@ with tab1:
             label=phase
         )
  
-    # -------------------------
-    # Event Markers
-    # -------------------------
- 
-    ax.axvline(start_idx, color="blue", linestyle="--", linewidth=1.5)
-    ax.axvline(stop_idx, color="orange", linestyle="--", linewidth=1.5)
- 
-    ax.text(
-        start_idx,
-        arm_smooth.iloc[start_idx],
-        "Start",
-        color="blue",
-        fontsize=9
-    )
- 
-    ax.text(
-        stop_idx,
-        arm_smooth.iloc[stop_idx],
-        "Stop",
-        color="orange",
-        fontsize=9
-    )
- 
     ax.set_title("Phase Detection Plot")
     ax.set_xlabel("Frame")
     ax.set_ylabel("Shoulder Flexion Angle (deg)")
@@ -448,48 +409,15 @@ with tab1:
  
     st.pyplot(fig)
  
-    # -------------------------
-    # Event Information
-    # -------------------------
- 
-    st.markdown("---")
- 
-    # === [変更1] Start / Stop の数字が何を意味するかを説明 ===
-    st.caption(
-        "下の数値は、動作データ全体の中で「Start（挙上開始位置）」「Stop（挙上完了・Top到達位置）」と"
-        "判定された**フレーム番号**（何コマ目か）です。OpenCapのサンプリングレートは60Hzのため、"
-        "フレーム番号 ÷ 60 で動作開始からの経過秒数に変換できます。"
-    )
- 
-    col1, col2 = st.columns(2)
- 
-    with col1:
-        st.metric("Start（挙上開始のフレーム番号）", start_idx)
-        st.caption(f"動作開始から約 {start_idx / 60:.2f} 秒後")
- 
-    with col2:
-        st.metric("Stop（挙上完了のフレーム番号）", stop_idx)
-        st.caption(f"動作開始から約 {stop_idx / 60:.2f} 秒後")
- 
     # ==========================================================
     # Phase Summary Table
     # ==========================================================
  
     st.subheader("Phase Summary Table")
  
-    st.caption(
-        "各フェーズにおける各関節の最小値、最大値、平均値、標準偏差、可動域（ROM）を算出します。"
-    )
+    st.caption(t("common.phase_summary_caption"))
  
-    st.markdown("""
-**各指標の説明**
- 
-- **Min**：各フェーズにおける最小値
-- **Max**：各フェーズにおける最大値
-- **Mean**：各フェーズにおける平均値
-- **Std**：各フェーズにおける標準偏差
-- **ROM**：Range of Motion（Max − Min）
-""")
+    st.markdown(t("common.phase_metric_explanation"))
  
     st.dataframe(
         phase_summary_df,
@@ -705,9 +633,7 @@ with tab2:
  
     st.subheader("Joint Time Series")
  
-    st.caption(
-        "肩関節挙上および体幹・骨盤運動の時系列変化を表示します。"
-    )
+    st.caption(t("arm_flexion.movement_analysis_caption"))
  
     # OpenCap sampling rate (60 Hz)
     time = np.arange(len(df_phase)) / 60
@@ -873,18 +799,6 @@ with tab2:
  
     st.pyplot(fig)
  
-    # === [変更5] Movement Analysis にも Pelvic Rotation の ROM 数値を明示 ===
-    pelvis_rotation_rom_tab2 = round(
-        df_phase["pelvis_rotation"].max()
-        -
-        df_phase["pelvis_rotation"].min(),
-        1
-    )
- 
-    st.caption(
-        f"Pelvic Rotation ROM（この動作中の骨盤回旋の可動域）: {pelvis_rotation_rom_tab2:.1f}°"
-    )
- 
 # =========================
 # Symmetry Analysis
 # =========================
@@ -893,9 +807,7 @@ with tab3:
  
     st.subheader("Phase Symmetry")
  
-    st.caption(
-        "肩関節挙上動作における左右肩関節ROM差を各Phaseごとに評価します。"
-    )
+    st.caption(t("arm_flexion.symmetry_caption"))
  
     joints = {
  
@@ -1097,13 +1009,9 @@ with tab3:
  
     st.subheader("Healthy ROM Comparison")
  
-    st.caption(
-        "肩関節挙上動作における正常可動域（Healthy ROM）との比較を行います。"
-    )
+    st.caption(t("arm_flexion.healthy_rom_caption"))
  
-    st.caption(
-        "Difference% = Subject ROM と Healthy ROM中央値との差"
-    )
+    st.caption(t("common.difference_pct_caption"))
  
     fig = go.Figure(
  
@@ -1296,17 +1204,16 @@ with tab6:
  
     st.title("Arm Flexion Dashboard")
  
-    st.caption(
-        "肩関節挙上動作の主要指標を表示します"
-    )
+    st.caption(t("arm_flexion.dashboard_caption"))
  
     # =========================
     # KPI
-    # === [変更2] Max Shoulder Flexion を左右別々に算出 ===
     # =========================
  
-    max_arm_flexion_r = df_phase["arm_flex_r"].max()
-    max_arm_flexion_l = df_phase["arm_flex_l"].max()
+    max_arm_flexion = max(
+        df_phase["arm_flex_r"].max(),
+        df_phase["arm_flex_l"].max()
+    )
  
     lumbar_compensation = round(
         df_phase["lumbar_extension"].max()
@@ -1322,43 +1229,45 @@ with tab6:
         1
     )
  
-    # === [変更6] Dashboard Key Metrics に Pelvic Rotation (ROM) を追加 ===
-    pelvis_rotation_rom = round(
-        df_phase["pelvis_rotation"].max()
-        -
-        df_phase["pelvis_rotation"].min(),
+    comparison_df["ROM_Difference_%"] = pd.to_numeric(
+        comparison_df["ROM_Difference_%"],
+        errors="coerce"
+    )
+ 
+    overall_deviation = round(
+        comparison_df["ROM_Difference_%"]
+        .abs()
+        .mean(),
         1
     )
  
     st.subheader("Key Metrics")
  
-    with st.expander("📖 指標の説明を見る"):
+    with st.expander(t("common.metrics_expander_label")):
  
-        # === [変更3] ROM Deviation の説明行を削除 / [変更6] Pelvic Rotation の説明行を追加 ===
-        st.markdown("""
-| 指標 | 説明 |
-|---|---|
-| **Shoulder Flexion (R/L)** | 肩関節挙上動作中の最大肩屈曲角度（右・左それぞれ） |
-| **Lumbar Compensation** | 肩を挙上する際に生じる腰椎伸展の変化量。肩の可動域不足を補う代償動作を評価 |
-| **Pelvis Compensation** | 肩挙上動作中の骨盤傾斜変化量。骨盤の姿勢制御・下半身からの代償動作を評価 |
-| **Pelvic Rotation (ROM)** | 肩挙上動作中の骨盤回旋角度の変化量。体幹の回旋による代償動作を評価 |
-""")
+        st.markdown(t("arm_flexion.metrics_table"))
  
-    # === [変更2] 左右別々の値を上下に積み重ねて表示 / [変更3] ROM Deviation 列を削除 / [変更6] Pelvic Rotation 列を追加 ===
     col1, col2, col3, col4 = st.columns(4)
  
-    with col1:
-        st.metric("Shoulder Flexion (R)", f"{max_arm_flexion_r:.1f}°")
-        st.metric("Shoulder Flexion (L)", f"{max_arm_flexion_l:.1f}°")
+    col1.metric(
+        "Max Shoulder Flexion",
+        f"{max_arm_flexion:.1f}°"
+    )
  
-    with col2:
-        st.metric("Lumbar Compensation", f"{lumbar_compensation:.1f}°")
+    col2.metric(
+        "Lumbar Compensation",
+        f"{lumbar_compensation:.1f}°"
+    )
  
-    with col3:
-        st.metric("Pelvis Compensation", f"{pelvis_compensation:.1f}°")
+    col3.metric(
+        "Pelvis Compensation",
+        f"{pelvis_compensation:.1f}°"
+    )
  
-    with col4:
-        st.metric("Pelvic Rotation (ROM)", f"{pelvis_rotation_rom:.1f}°")
+    col4.metric(
+        "ROM Deviation",
+        f"{overall_deviation:.1f}%"
+    )
  
     # =========================
     # Interactive Motion Viewer
@@ -1366,9 +1275,7 @@ with tab6:
  
     st.subheader("Interactive Motion Viewer")
  
-    st.caption(
-        "💡 左のチェックボックスで、表示する肩関節・体幹・骨盤の指標を選択できます。"
-    )
+    st.caption(t("arm_flexion.checkbox_instruction"))
  
     left_col, right_col = st.columns([1.2, 4])
  
@@ -1569,95 +1476,15 @@ with tab6:
  
         st.pyplot(fig2)
  
-        # ======================================
-        # [変更4] Lumbar Motion（専用プロットを新規追加）
-        #
-        # これまで Lumbar Extension のチェックボックスは、上の
-        # Shoulder Flexion（0〜180°）と同じ軸を共有する Arm Flexion
-        # Motion チャートに1本の線として追加されるだけでした。腰椎
-        # 伸展の変化量は数度〜十数度程度と肩関節に比べて非常に小さく、
-        # 同じスケールのグラフでは線がほぼ潰れて見え、「チェックして
-        # も反映されていない」ように見える原因になっていました。
-        # Pelvic Motion と同様に専用のグラフを用意し、チェックを
-        # 入れると単独で腰椎伸展の波形が確認できるようにしました。
-        # ======================================
- 
-        st.subheader("Lumbar Motion")
- 
-        fig3, ax3 = plt.subplots(
-            figsize=(15, 4),
-            facecolor="black"
-        )
- 
-        ax3.set_facecolor("black")
- 
-        ax3.tick_params(colors="white")
-        ax3.xaxis.label.set_color("white")
-        ax3.yaxis.label.set_color("white")
-        ax3.title.set_color("white")
- 
-        for spine in ax3.spines.values():
-            spine.set_color("white")
- 
-        ax3.grid(color="white", alpha=0.25)
- 
-        if show_lumbar:
- 
-            ax3.plot(
-                time,
-                df_phase["lumbar_extension"],
-                label="Lumbar Extension",
-                linewidth=2,
-                color="yellow"
-            )
- 
-            legend3 = ax3.legend(loc="upper right", fontsize=9)
- 
-            legend3.get_frame().set_facecolor("black")
-            legend3.get_frame().set_edgecolor("white")
- 
-            for text in legend3.get_texts():
-                text.set_color("white")
- 
-        else:
- 
-            ax3.text(
-                0.5,
-                0.5,
-                "左の「Trunk」→「Lumbar Extension」にチェックを入れると表示されます",
-                color="white",
-                fontsize=11,
-                ha="center",
-                va="center",
-                transform=ax3.transAxes
-            )
- 
-        ax3.set_title("Lumbar Motion")
-        ax3.set_xlabel("Time (s)")
-        ax3.set_ylabel("Angle (deg)")
- 
-        st.pyplot(fig3)
- 
     # =========================
     # Joint ROM Summary
     # =========================
  
     st.subheader("Joint ROM Summary")
  
-    with st.expander("📖 Joint ROMとは"):
+    with st.expander(t("common.joint_rom_expander_label")):
  
-        st.markdown("""
-関節が動作中にどれだけ動いたかを示す指標です。
- 
-**ROM = 最大角度 − 最小角度**
- 
-| 部位 | 評価内容 |
-|---|---|
-| **Right Shoulder** | 右肩屈曲角度（arm_flex_r）。肩挙上動作における右肩の可動量 |
-| **Left Shoulder** | 左肩屈曲角度（arm_flex_l）。左右肩関節の運動量を比較 |
-| **Lumbar** | 腰椎伸展角度（lumbar_extension）。肩挙上時の体幹代償動作を評価 |
-| **Pelvis Tilt** | 骨盤傾斜角度（pelvis_tilt）。肩挙上中の姿勢制御を評価 |
-""")
+        st.markdown(t("arm_flexion.joint_rom_content"))
  
     rom_joints = {
  
@@ -1729,14 +1556,9 @@ with tab6:
  
     st.subheader("Joint Asymmetry")
  
-    with st.expander("📖 Joint Asymmetryとは"):
+    with st.expander(t("common.joint_asymmetry_expander_label")):
  
-        st.markdown("""
-左右の肩関節可動域（ROM）の差を、大きい方のROMで正規化しパーセント表示した指標です。
- 
-- **15%以下** — 左右対称。バランスの良い肩挙上パターン
-- **15%超** — 左右差あり。肩関節可動域制限・筋力差・体幹代償動作の可能性
-""")
+        st.markdown(t("arm_flexion.joint_asymmetry_content"))
  
     asymmetry_joints = {
  
@@ -1834,20 +1656,11 @@ with tab7:
  
     st.subheader("Movement Features")
  
-    st.caption(
-        "肩関節可動域・体幹/骨盤代償動作・左右差から肩挙上動作を評価する特徴量です。"
-    )
+    st.caption(t("arm_flexion.feature_caption"))
  
-    with st.expander("📖 特徴量の説明を見る"):
+    with st.expander(t("common.feature_expander_label")):
  
-        st.markdown("""
-| 特徴量 | 説明 |
-|---|---|
-| **Shoulder ROM** | 左右肩関節ROMの平均値（右肩・左肩それぞれの最大角度と最小角度の差から算出） |
-| **Lumbar Compensation** | 肩挙上動作中に生じる腰椎伸展角度の変化量（ROM） |
-| **Pelvis Tilt Compensation** | 肩挙上動作中に生じる骨盤傾斜角度の変化量（ROM） |
-| **Shoulder Asymmetry** | 右肩と左肩ROMの左右差（%） |
-""")
+        st.markdown(t("arm_flexion.feature_table"))
  
     right_rom = (
         df_phase["arm_flex_r"].max()
@@ -1986,25 +1799,15 @@ with tab7:
  
     st.subheader("Movement Score")
  
-    st.caption(
-        "肩関節の可動性・左右対称性・体幹/骨盤の代償動作を総合評価する100点満点のスコアです。"
-    )
+    st.caption(t("arm_flexion.score_caption"))
  
-    with st.expander("📖 スコアの算出方法を見る"):
+    with st.expander(t("common.score_expander_label")):
  
-        st.markdown("""
-**Overall Score = Symmetry×0.30 + Mobility×0.40 + Lumbar×0.15 + Pelvis×0.15**
- 
-| 要素 | 重み | 算出元 |
-|---|---|---|
-| **Symmetry Score** | 30% | 肩関節左右差（Shoulder Asymmetry）。差が小さいほど高スコア |
-| **Mobility Score** | 40% | 肩関節ROMを180°基準で評価。可動域が大きいほど高スコア |
-| **Lumbar Score** | 15% | 肩挙上時の腰椎伸展による代償動作。伸展が大きいほど低スコア |
-| **Pelvis Score** | 15% | 肩挙上時の骨盤傾斜変化。動きが少ないほど高スコア |
-""")
+        st.markdown(t("arm_flexion.score_content"))
  
     st.metric(
         "Overall Score",
         f"{overall_score}/100"
     )
+ 
  
