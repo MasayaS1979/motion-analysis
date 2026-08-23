@@ -2653,44 +2653,87 @@ with tab8:
         elements.append(fig_to_rl_image(fig_rom_pdf, width_cm=14))
         elements.append(Spacer(1, 0.5*cm))
 
-        # ---- Healthy ROM Comparison (uses comparison_display_df, the side-filtered table) ----
+         # ---- Healthy ROM Comparison (uses comparison_display_df, the side-filtered table) ----
         elements.append(Paragraph("Healthy ROM Comparison", heading_style))
 
-        rom_table_data = [["Variable", "Subject Value", "Healthy Min", "Healthy Max", "Out of Range"]]
-        for idx, row in comparison_display_df.iterrows():
-            rom_table_data.append([
-                str(row.get("Variable", idx)),
-                f"{row['Subject_Value']:.2f}" if "Subject_Value" in row else "",
-                f"{row['Healthy_Min']:.2f}" if "Healthy_Min" in row else "",
-                f"{row['Healthy_Max']:.2f}" if "Healthy_Max" in row else "",
-                "⚠️" if row.get("Out_of_Range", False) else "",
-            ])
-        rom_table = Table(rom_table_data, colWidths=[5*cm, 3*cm, 3*cm, 3*cm, 2.5*cm])
-        rom_table.setStyle(TableStyle([
-            ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#37474F")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F5F5")]),
-        ]))
-        elements.append(rom_table)
-        elements.append(Spacer(1, 0.3*cm))
+        def _resolve_rom_columns(dframe):
+            cols = list(dframe.columns)
+            def find(*keywords):
+                for c in cols:
+                    cl = str(c).lower()
+                    if all(k in cl for k in keywords):
+                        return c
+                return None
 
-        fig_healthy_pdf, ax_healthy_pdf = plt.subplots(figsize=(10, 4))
-        bar_colors = ["crimson" if oor else "seagreen" for oor in comparison_display_df["Out_of_Range"]]
-        ax_healthy_pdf.bar(comparison_display_df.index.astype(str), comparison_display_df["Subject_Value"], color=bar_colors)
-        ax_healthy_pdf.set_ylabel("Value")
-        ax_healthy_pdf.tick_params(axis="x", rotation=45)
-        elements.append(fig_to_rl_image(fig_healthy_pdf, width_cm=16))
+            oor_col = find("out", "range") or find("range")
+            min_col = find("min")
+            max_col = find("max")
+            value_col = None
+            for c in cols:
+                if c in (oor_col, min_col, max_col):
+                    continue
+                cl = str(c).lower()
+                if any(k in cl for k in ["subject", "value", "measured", "result"]):
+                    value_col = c
+                    break
+            if value_col is None:
+                for c in cols:
+                    if c in (oor_col, min_col, max_col):
+                        continue
+                    if pd.api.types.is_numeric_dtype(dframe[c]):
+                        value_col = c
+                        break
+            return value_col, min_col, max_col, oor_col
+
+        VALUE_COL, MIN_COL, MAX_COL, OOR_COL = _resolve_rom_columns(comparison_display_df)
+
+        if VALUE_COL is None:
+            elements.append(Paragraph(
+                f"(Could not detect ROM comparison columns automatically. "
+                f"Available columns: {list(comparison_display_df.columns)})",
+                normal_style
+            ))
+        else:
+            rom_table_data = [["Variable", "Subject Value", "Healthy Min", "Healthy Max", "Out of Range"]]
+            for idx, row in comparison_display_df.iterrows():
+                rom_table_data.append([
+                    str(row.get("Variable", idx)),
+                    f"{row[VALUE_COL]:.2f}" if VALUE_COL else "",
+                    f"{row[MIN_COL]:.2f}" if MIN_COL else "",
+                    f"{row[MAX_COL]:.2f}" if MAX_COL else "",
+                    "⚠️" if (OOR_COL and bool(row.get(OOR_COL, False))) else "",
+                ])
+            rom_table = Table(rom_table_data, colWidths=[5*cm, 3*cm, 3*cm, 3*cm, 2.5*cm])
+            rom_table.setStyle(TableStyle([
+                ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#37474F")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F5F5")]),
+            ]))
+            elements.append(rom_table)
+            elements.append(Spacer(1, 0.3*cm))
+
+            if OOR_COL:
+                bar_colors = ["crimson" if bool(v) else "seagreen" for v in comparison_display_df[OOR_COL]]
+            else:
+                bar_colors = "seagreen"
+
+            fig_healthy_pdf, ax_healthy_pdf = plt.subplots(figsize=(10, 4))
+            ax_healthy_pdf.bar(comparison_display_df.index.astype(str), comparison_display_df[VALUE_COL], color=bar_colors)
+            ax_healthy_pdf.set_ylabel("Value")
+            ax_healthy_pdf.tick_params(axis="x", rotation=45)
+            elements.append(fig_to_rl_image(fig_healthy_pdf, width_cm=16))
         elements.append(Spacer(1, 0.5*cm))
 
-        # ---- Clinical Findings ----
+       # ---- Clinical Findings ----
         elements.append(Paragraph("Clinical Findings", heading_style))
         findings = []
-        for idx, row in comparison_display_df.iterrows():
-            if row.get("Out_of_Range", False):
-                findings.append(f"- {row.get('Variable', idx)} is outside the healthy reference range.")
+        if OOR_COL:
+            for idx, row in comparison_display_df.iterrows():
+                if bool(row.get(OOR_COL, False)):
+                    findings.append(f"- {row.get('Variable', idx)} is outside the healthy reference range.")
         for label, score in [("Hip", hip_score), ("Knee", knee_score), ("Ankle", ankle_score)]:
             if score < 60:
                 findings.append(f"- {label} ROM score ({score:.0f}) indicates reduced mobility relative to healthy reference.")
