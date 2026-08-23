@@ -8,6 +8,34 @@ from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
 from i18n import t, language_switcher
+from reportlab.platypus import Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.platypus import Image
+from reportlab.lib.enums import TA_CENTER
+from xml.sax.saxutils import escape
+
+pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
+pdfmetrics.registerFontFamily(
+    "HeiseiKakuGo-W5",
+    normal="HeiseiKakuGo-W5",
+    bold="HeiseiKakuGo-W5",
+    italic="HeiseiKakuGo-W5",
+    boldItalic="HeiseiKakuGo-W5"
+)
+
+def fig_to_rl_image(fig, width_cm=16):
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    buf.seek(0)
+    fig_w, fig_h = fig.get_size_inches()
+    plt.close(fig)
+    img_width = width_cm * cm
+    img_height = img_width * (fig_h / fig_w)
+    return Image(buf, width=img_width, height=img_height)
  
 st.set_page_config(page_title="Gait Analysis", layout="wide")
  
@@ -444,14 +472,15 @@ else:
 # =========================
 # Tabs
 # =========================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Gait Phases",
     "Movement Analysis",
     "Symmetry Analysis",
     "Clinical Report",
     "Raw Data",
     "Dashboard",
-    "Movement Score"
+    "Movement Score",
+    "PDF Report"
 ])
  
 # =========================
@@ -2077,4 +2106,278 @@ with tab7:
         "Overall Score",
         f"{overall_score}/100"
     )
+
+# =========================
+# PDF Report
+# =========================
+with tab8:
+    st.subheader("PDF Report")
+    st.caption("Gait Analysisの主要な結果をまとめた統合PDFレポートを生成します。")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        subject_name = st.text_input("対象者名", value="")
+    with col2:
+        exam_date = st.text_input("測定日", value="")
+    with col3:
+        examiner_name = st.text_input("検者", value="")
+    st.markdown("#### 総合評価 (Clinical Impression)")
+    clinical_comment = st.text_area(
+        "検者による総合所見・コメントを記入してください（PDFに反映されます）",
+        value="",
+        height=150
+    )
+    if st.button("📄 Generate PDF Report"):
+        report_buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            report_buffer,
+            pagesize=A4,
+            topMargin=1.5 * cm,
+            bottomMargin=1.5 * cm,
+            leftMargin=1.5 * cm,
+            rightMargin=1.5 * cm
+        )
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            "TitleJP", parent=styles["Title"],
+            fontName="HeiseiKakuGo-W5", fontSize=18
+        )
+        heading_style = ParagraphStyle(
+            "HeadingJP", parent=styles["Heading2"],
+            fontName="HeiseiKakuGo-W5", spaceBefore=12, spaceAfter=6
+        )
+        normal_style = ParagraphStyle(
+            "NormalJP", parent=styles["Normal"],
+            fontName="HeiseiKakuGo-W5", fontSize=9
+        )
+        # ---- Overall Score用ハイライトスタイル ----
+        if overall_score >= 80:
+            score_color = colors.HexColor("#1B7A3D")   # 緑
+        elif overall_score >= 60:
+            score_color = colors.HexColor("#B8860B")   # 黄土色
+        else:
+            score_color = colors.HexColor("#C0392B")   # 赤
+        score_style = ParagraphStyle(
+            "ScoreStyle",
+            parent=styles["Normal"],
+            fontName="HeiseiKakuGo-W5",
+            fontSize=28,
+            leading=34,
+            textColor=colors.white,
+            backColor=score_color,
+            alignment=TA_CENTER,
+            spaceBefore=6,
+            spaceAfter=10,
+            borderPadding=8
+        )
+        # ※ しきい値(80/60)は仮の基準です。臨床基準に合わせて調整してください。
+        TABLE_STYLE = TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+            ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ])
+        colors_phase_pdf = {
+            "Heel Strike": "blue",
+            "Mid Stance": "orange",
+            "Toe Off": "limegreen",
+            "Swing": "red"
+        }
+        elements = []
+        # ---- Title / Subject Info ----
+        elements.append(Paragraph("Gait Analysis Clinical Report", title_style))
+        elements.append(Spacer(1, 6))
+        info_text = (
+            f"対象者名: {subject_name or '-'} ｜ "
+            f"測定日: {exam_date or '-'} ｜ "
+            f"検者: {examiner_name or '-'}"
+        )
+        elements.append(Paragraph(info_text, normal_style))
+        elements.append(
+            Paragraph(
+                f"Cadence: {cadence:.1f} steps/min ／ "
+                f"Step Time: {step_time:.2f} sec" if not np.isnan(step_time) else
+                f"Cadence: {cadence:.1f} steps/min ／ Step Time: N/A",
+                normal_style
+            )
+        )
+        elements.append(Spacer(1, 12))
+        # ---- Gait Phase Detection Plot ----
+        elements.append(Paragraph("Gait Phase Detection", heading_style))
+        pdf_phase_fig, pdf_phase_ax = plt.subplots(figsize=(10, 4))
+        pdf_phase_ax.plot(
+            signal_smooth_r,
+            color="white",
+            linewidth=1,
+            alpha=0.4,
+            label="Right Ankle"
+        )
+        pdf_phase_ax.plot(
+            signal_smooth_l,
+            color="cyan",
+            linewidth=1,
+            alpha=0.4,
+            linestyle="--",
+            label="Left Ankle"
+        )
+        for phase in phase_order:
+            idx_r = df_phase_r["Phase"] == phase
+            pdf_phase_ax.scatter(
+                df_phase_r.index[idx_r],
+                signal_smooth_r[idx_r],
+                c=colors_phase_pdf[phase],
+                marker="o",
+                s=8,
+                label=f"R {phase}"
+            )
+        for phase in phase_order:
+            idx_l = df_phase_l["Phase"] == phase
+            pdf_phase_ax.scatter(
+                df_phase_l.index[idx_l],
+                signal_smooth_l[idx_l],
+                c=colors_phase_pdf[phase],
+                marker="^",
+                s=8,
+                label=f"L {phase}"
+            )
+        pdf_phase_ax.set_title("Gait Phase Detection Plot")
+        pdf_phase_ax.set_xlabel("Frame")
+        pdf_phase_ax.set_ylabel("Ankle Angle (deg)")
+        pdf_phase_ax.legend(fontsize=6, ncol=2)
+        pdf_phase_ax.grid(alpha=0.3)
+        elements.append(fig_to_rl_image(pdf_phase_fig, width_cm=16))
+        elements.append(Spacer(1, 12))
+        # ---- Key Metrics ----
+        elements.append(Paragraph("Key Metrics", heading_style))
+        key_metrics_data = [
+            ["Metric", "Right", "Left"],
+            ["Hip ROM (°)", f"{hip_rom_r:.1f}", f"{hip_rom_l:.1f}"],
+            ["Knee ROM (°)", f"{knee_rom_r:.1f}", f"{knee_rom_l:.1f}"],
+            ["Ankle ROM (°)", f"{ankle_rom_r:.1f}", f"{ankle_rom_l:.1f}"],
+        ]
+        key_metrics_table = Table(key_metrics_data, hAlign="LEFT")
+        key_metrics_table.setStyle(TABLE_STYLE)
+        elements.append(key_metrics_table)
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph(
+            f"Pelvic Tilt: {pelvis_tilt_rom:.1f}°　"
+            f"Pelvic Rotation: {pelvis_rotation_rom:.1f}°　"
+            f"Pelvic Obliquity: {pelvic_obliquity_rom:.1f}°　"
+            f"Lumbar Extension: {lumbar_extension_rom:.1f}°",
+            normal_style
+        ))
+        elements.append(Spacer(1, 12))
+        # ---- Symmetry Analysis (表 + グラフ) ----
+        elements.append(Paragraph("Symmetry Analysis", heading_style))
+        symmetry_joints_pdf = {
+            "Hip": ("hip_flexion_r", "hip_flexion_l"),
+            "Knee": ("knee_angle_r", "knee_angle_l"),
+            "Ankle": ("ankle_angle_r", "ankle_angle_l"),
+        }
+        for joint_name, (right_var, left_var) in symmetry_joints_pdf.items():
+            right_df = phase_summary_df[phase_summary_df["Variable"] == right_var]
+            left_df = phase_summary_df[phase_summary_df["Variable"] == left_var]
+            rows = [["Phase", "Right_ROM", "Left_ROM", "Asymmetry_%"]]
+            asym_values = []
+            for phase in phase_order:
+                right_rom = right_df[f"{phase}_ROM"].iloc[0]
+                left_rom = left_df[f"{phase}_ROM"].iloc[0]
+                asymmetry = 0 if max(right_rom, left_rom) == 0 else (
+                    abs(right_rom - left_rom) / max(right_rom, left_rom) * 100
+                )
+                asym_values.append(asymmetry)
+                rows.append([phase, f"{right_rom:.2f}", f"{left_rom:.2f}", f"{asymmetry:.2f}"])
+            elements.append(Paragraph(
+                f"{joint_name}  (Max: {max(asym_values):.1f}% / Avg: {np.mean(asym_values):.1f}%)",
+                normal_style
+            ))
+            joint_table = Table(rows, hAlign="LEFT")
+            joint_table.setStyle(TABLE_STYLE)
+            elements.append(joint_table)
+            elements.append(Spacer(1, 6))
+            sym_fig, sym_ax = plt.subplots(figsize=(6, 3))
+            sym_ax.bar(phase_order, asym_values, color="royalblue")
+            sym_ax.axhline(15, color="red", linestyle="--", linewidth=1, label="15% Threshold")
+            sym_ax.set_ylabel("Asymmetry (%)")
+            sym_ax.set_title(f"Gait {joint_name} ROM Asymmetry by Phase")
+            sym_ax.legend(fontsize=8)
+            sym_ax.grid(alpha=0.3, axis="y")
+            plt.setp(sym_ax.get_xticklabels(), rotation=20, ha="right", fontsize=7)
+            elements.append(fig_to_rl_image(sym_fig, width_cm=11))
+            elements.append(Spacer(1, 10))
+        # ---- Healthy ROM Comparison (表 + グラフ) ----
+        elements.append(Paragraph("Healthy ROM Comparison", heading_style))
+        hrom_rows = [list(comparison_df.columns)]
+        for _, row in comparison_df.iterrows():
+            hrom_rows.append([str(v) for v in row.tolist()])
+        hrom_table = Table(hrom_rows, hAlign="LEFT")
+        hrom_table.setStyle(TABLE_STYLE)
+        elements.append(hrom_table)
+        elements.append(Spacer(1, 8))
+        hrom_fig, hrom_ax = plt.subplots(figsize=(10, 4))
+        bar_colors_pdf = [
+            "red" if row["Status"] == "Abnormal" else "royalblue"
+            for _, row in comparison_df.iterrows()
+        ]
+        hrom_ax.bar(
+            comparison_df["Variable"],
+            comparison_df["ROM_Difference_%"],
+            color=bar_colors_pdf
+        )
+        hrom_ax.axhline(0, color="black", linestyle="--", linewidth=1)
+        hrom_ax.set_ylabel("Difference (%)")
+        hrom_ax.set_title("Gait Healthy ROM Comparison")
+        plt.setp(hrom_ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
+        hrom_ax.grid(alpha=0.3, axis="y")
+        elements.append(fig_to_rl_image(hrom_fig, width_cm=16))
+        elements.append(Spacer(1, 12))
+        # ---- Clinical Findings ----
+        elements.append(Paragraph("Clinical Findings", heading_style))
+        pdf_findings = []
+        if cadence < 90:
+            pdf_findings.append("Cadence below normal range.")
+        if cadence > 130:
+            pdf_findings.append("Cadence above normal range.")
+        for joint_name in symmetry_joints_pdf.keys():
+            asym_value = gait_asymmetry_results.get(joint_name, 0)
+            if asym_value > 15:
+                pdf_findings.append(f"{joint_name} ROM asymmetry exceeds 15% ({asym_value:.1f}%).")
+        for _, row in comparison_df.iterrows():
+            if row["Status"] == "Abnormal":
+                pdf_findings.append(f"{row['Variable']} ROM outside healthy range.")
+        if len(pdf_findings) == 0:
+            elements.append(Paragraph("No major abnormalities detected.", normal_style))
+        else:
+            for item in pdf_findings:
+                elements.append(Paragraph(f"・{item}", normal_style))
+        elements.append(Spacer(1, 12))
+        # ---- Clinical Impression（検者記入欄） ----
+        elements.append(Paragraph("Clinical Impression（総合評価）", heading_style))
+        comment_text = (
+            escape(clinical_comment).replace("\n", "<br/>")
+            if clinical_comment.strip()
+            else "(記入なし)"
+        )
+        elements.append(Paragraph(comment_text, normal_style))
+        elements.append(Spacer(1, 12))
+        # ---- Movement Score（ハイライト表示） ----
+        elements.append(Paragraph("Movement Score", heading_style))
+        elements.append(Paragraph(
+            f"OVERALL SCORE: {overall_score} / 100",
+            score_style
+        ))
+        feature_rows = [["Feature", "Value"]]
+        for _, row in gait_feature_df.iterrows():
+            feature_rows.append([str(row["Feature"]), str(row["Value"])])
+        feature_table = Table(feature_rows, hAlign="LEFT")
+        feature_table.setStyle(TABLE_STYLE)
+        elements.append(feature_table)
+        doc.build(elements)
+        st.download_button(
+            "📥 Download PDF Report",
+            data=report_buffer.getvalue(),
+            file_name="Gait_Clinical_Report.pdf",
+            mime="application/pdf"
+        )
+        st.success("PDFレポートを生成しました。上のボタンからダウンロードしてください。")
  
