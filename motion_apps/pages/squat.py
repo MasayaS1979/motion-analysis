@@ -14,6 +14,9 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.platypus import Image
+from reportlab.lib.enums import TA_CENTER
+from xml.sax.saxutils import escape
 
 pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
 
@@ -24,6 +27,16 @@ pdfmetrics.registerFontFamily(
     italic="HeiseiKakuGo-W5",
     boldItalic="HeiseiKakuGo-W5"
 )
+
+def fig_to_rl_image(fig, width_cm=16):
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    buf.seek(0)
+    fig_w, fig_h = fig.get_size_inches()
+    plt.close(fig)
+    img_width = width_cm * cm
+    img_height = img_width * (fig_h / fig_w)
+    return Image(buf, width=img_width, height=img_height)
  
 st.set_page_config(page_title="Squat Analysis", layout="wide")
  
@@ -1991,7 +2004,7 @@ with tab7:
         "Overall Score",
         f"{overall_score}/100"
     )
- # =========================
+# =========================
 # PDF Report
 # =========================
 with tab8:
@@ -2011,6 +2024,14 @@ with tab8:
     with col3:
         examiner_name = st.text_input("検者", value="")
 
+    st.markdown("#### 総合評価 (Clinical Impression)")
+
+    clinical_comment = st.text_area(
+        "検者による総合所見・コメントを記入してください（PDFに反映されます）",
+        value="",
+        height=150
+    )
+
     if st.button("📄 Generate PDF Report"):
 
         report_buffer = BytesIO()
@@ -2027,26 +2048,42 @@ with tab8:
         styles = getSampleStyleSheet()
 
         title_style = ParagraphStyle(
-            "TitleJP",
-            parent=styles["Title"],
-            fontName="HeiseiKakuGo-W5",
-            fontSize=18
+            "TitleJP", parent=styles["Title"],
+            fontName="HeiseiKakuGo-W5", fontSize=18
         )
 
         heading_style = ParagraphStyle(
-            "HeadingJP",
-            parent=styles["Heading2"],
-            fontName="HeiseiKakuGo-W5",
-            spaceBefore=12,
-            spaceAfter=6
+            "HeadingJP", parent=styles["Heading2"],
+            fontName="HeiseiKakuGo-W5", spaceBefore=12, spaceAfter=6
         )
 
         normal_style = ParagraphStyle(
-            "NormalJP",
+            "NormalJP", parent=styles["Normal"],
+            fontName="HeiseiKakuGo-W5", fontSize=9
+        )
+
+        # ---- Overall Score用ハイライトスタイル ----
+        if overall_score >= 80:
+            score_color = colors.HexColor("#1B7A3D")   # 緑
+        elif overall_score >= 60:
+            score_color = colors.HexColor("#B8860B")   # 黄土色
+        else:
+            score_color = colors.HexColor("#C0392B")   # 赤
+
+        score_style = ParagraphStyle(
+            "ScoreStyle",
             parent=styles["Normal"],
             fontName="HeiseiKakuGo-W5",
-            fontSize=9
+            fontSize=28,
+            leading=34,
+            textColor=colors.white,
+            backColor=score_color,
+            alignment=TA_CENTER,
+            spaceBefore=6,
+            spaceAfter=10,
+            borderPadding=8
         )
+        # ※ しきい値(80/60)は仮の基準です。臨床基準に合わせて調整してください。
 
         TABLE_STYLE = TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
@@ -2055,6 +2092,13 @@ with tab8:
             ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
         ])
+
+        colors_phase_pdf = {
+            "Standing": "dodgerblue",
+            "Descending": "orange",
+            "Bottom": "red",
+            "Ascending": "limegreen"
+        }
 
         elements = []
 
@@ -2068,13 +2112,44 @@ with tab8:
             f"検者: {examiner_name or '-'}"
         )
         elements.append(Paragraph(info_text, normal_style))
-
         elements.append(
             Paragraph(
                 f"Bottom frame: {bottom_idx} ／ Standing frame: {standing_idx}",
                 normal_style
             )
         )
+        elements.append(Spacer(1, 12))
+
+        # ---- Squat Phase Detection Plot ----
+        elements.append(Paragraph("Squat Phase Detection", heading_style))
+
+        pdf_phase_fig, pdf_phase_ax = plt.subplots(figsize=(10, 4))
+
+        pdf_phase_ax.plot(
+            df_phase.index, df_phase["pelvis_ty"],
+            color="black", linewidth=1, alpha=0.4
+        )
+
+        for phase in phase_order:
+            idx = df_phase["Phase"] == phase
+            pdf_phase_ax.scatter(
+                df_phase.index[idx],
+                df_phase["pelvis_ty"][idx],
+                c=colors_phase_pdf[phase],
+                s=8,
+                label=phase
+            )
+
+        pdf_phase_ax.axvline(bottom_idx, color="red", linestyle="--", linewidth=1)
+        pdf_phase_ax.axvline(standing_idx, color="dodgerblue", linestyle="--", linewidth=1)
+
+        pdf_phase_ax.set_title("Phase Detection Plot")
+        pdf_phase_ax.set_xlabel("Frame")
+        pdf_phase_ax.set_ylabel("Pelvis Vertical Position (m)")
+        pdf_phase_ax.legend(fontsize=8)
+        pdf_phase_ax.grid(alpha=0.3)
+
+        elements.append(fig_to_rl_image(pdf_phase_fig, width_cm=16))
         elements.append(Spacer(1, 12))
 
         # ---- Key Metrics ----
@@ -2099,7 +2174,7 @@ with tab8:
         ))
         elements.append(Spacer(1, 12))
 
-        # ---- Symmetry Analysis ----
+        # ---- Symmetry Analysis (表 + グラフ) ----
         elements.append(Paragraph("Symmetry Analysis", heading_style))
 
         symmetry_joints_pdf = {
@@ -2119,12 +2194,10 @@ with tab8:
             for phase in phase_order:
                 right_rom = right_df[f"{phase}_ROM"].iloc[0]
                 left_rom = left_df[f"{phase}_ROM"].iloc[0]
-
                 asymmetry = 0 if max(right_rom, left_rom) == 0 else (
                     abs(right_rom - left_rom) / max(right_rom, left_rom) * 100
                 )
                 asym_values.append(asymmetry)
-
                 rows.append([phase, f"{right_rom:.2f}", f"{left_rom:.2f}", f"{asymmetry:.2f}"])
 
             elements.append(Paragraph(
@@ -2135,9 +2208,22 @@ with tab8:
             joint_table = Table(rows, hAlign="LEFT")
             joint_table.setStyle(TABLE_STYLE)
             elements.append(joint_table)
-            elements.append(Spacer(1, 8))
+            elements.append(Spacer(1, 6))
 
-        # ---- Healthy ROM Comparison ----
+            sym_fig, sym_ax = plt.subplots(figsize=(6, 3))
+
+            sym_ax.bar(phase_order, asym_values, color="royalblue")
+            sym_ax.axhline(15, color="red", linestyle="--", linewidth=1, label="15% Threshold")
+
+            sym_ax.set_ylabel("Asymmetry (%)")
+            sym_ax.set_title(f"{joint_name} ROM Asymmetry by Phase")
+            sym_ax.legend(fontsize=8)
+            sym_ax.grid(alpha=0.3, axis="y")
+
+            elements.append(fig_to_rl_image(sym_fig, width_cm=11))
+            elements.append(Spacer(1, 10))
+
+        # ---- Healthy ROM Comparison (表 + グラフ) ----
         elements.append(Paragraph("Healthy ROM Comparison", heading_style))
 
         hrom_rows = [list(comparison_df.columns)]
@@ -2147,6 +2233,28 @@ with tab8:
         hrom_table = Table(hrom_rows, hAlign="LEFT")
         hrom_table.setStyle(TABLE_STYLE)
         elements.append(hrom_table)
+        elements.append(Spacer(1, 8))
+
+        hrom_fig, hrom_ax = plt.subplots(figsize=(10, 4))
+
+        bar_colors_pdf = [
+            "red" if row["Out_of_Range"] else "royalblue"
+            for _, row in comparison_df.iterrows()
+        ]
+
+        hrom_ax.bar(
+            comparison_df["Variable"],
+            comparison_df["ROM_Difference_%"],
+            color=bar_colors_pdf
+        )
+        hrom_ax.axhline(0, color="black", linestyle="--", linewidth=1)
+
+        hrom_ax.set_ylabel("Difference (%)")
+        hrom_ax.set_title("Healthy ROM Comparison")
+        plt.setp(hrom_ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
+        hrom_ax.grid(alpha=0.3, axis="y")
+
+        elements.append(fig_to_rl_image(hrom_fig, width_cm=16))
         elements.append(Spacer(1, 12))
 
         # ---- Clinical Findings ----
@@ -2171,10 +2279,24 @@ with tab8:
 
         elements.append(Spacer(1, 12))
 
-        # ---- Movement Score ----
+        # ---- Clinical Impression（検者記入欄） ----
+        elements.append(Paragraph("Clinical Impression（総合評価）", heading_style))
+
+        comment_text = (
+            escape(clinical_comment).replace("\n", "<br/>")
+            if clinical_comment.strip()
+            else "(記入なし)"
+        )
+        elements.append(Paragraph(comment_text, normal_style))
+        elements.append(Spacer(1, 12))
+
+        # ---- Movement Score（ハイライト表示） ----
         elements.append(Paragraph("Movement Score", heading_style))
-        elements.append(Paragraph(f"Overall Score: {overall_score} / 100", normal_style))
-        elements.append(Spacer(1, 4))
+
+        elements.append(Paragraph(
+            f"OVERALL SCORE: {overall_score} / 100",
+            score_style
+        ))
 
         feature_rows = [["Feature", "Value"]]
         for _, row in feature_df.iterrows():
