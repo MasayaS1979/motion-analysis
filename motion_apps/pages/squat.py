@@ -14,6 +14,16 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
+
+pdfmetrics.registerFontFamily(
+    "HeiseiKakuGo-W5",
+    normal="HeiseiKakuGo-W5",
+    bold="HeiseiKakuGo-W5",
+    italic="HeiseiKakuGo-W5",
+    boldItalic="HeiseiKakuGo-W5"
+)
  
 st.set_page_config(page_title="Squat Analysis", layout="wide")
  
