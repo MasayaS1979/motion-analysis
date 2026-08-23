@@ -8,6 +8,12 @@ from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
 from i18n import t, language_switcher
+from reportlab.platypus import Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
  
 st.set_page_config(page_title="Squat Analysis", layout="wide")
  
@@ -401,14 +407,15 @@ comparison_df = compare_subject_to_healthy(
 # =========================
 # Tabs
 # =========================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Squat Phases",
     "Movement Analysis",
     "Symmetry Analysis",
     "Clinical Report",
     "Raw Data",
     "Dashboard",
-    "Movement Score"
+    "Movement Score",
+    "PDF Report"
 ])
  
 # =========================
@@ -1909,6 +1916,7 @@ with tab7:
             )
  
         ]
+     
  
     )
  
@@ -1973,3 +1981,206 @@ with tab7:
         "Overall Score",
         f"{overall_score}/100"
     )
+ # =========================
+# PDF Report
+# =========================
+with tab8:
+
+    st.subheader("PDF Report")
+
+    st.caption("Squat Analysisの主要な結果をまとめた統合PDFレポートを生成します。")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        subject_name = st.text_input("対象者名", value="")
+
+    with col2:
+        exam_date = st.text_input("測定日", value="")
+
+    with col3:
+        examiner_name = st.text_input("検者", value="")
+
+    if st.button("📄 Generate PDF Report"):
+
+        report_buffer = BytesIO()
+
+        doc = SimpleDocTemplate(
+            report_buffer,
+            pagesize=A4,
+            topMargin=1.5 * cm,
+            bottomMargin=1.5 * cm,
+            leftMargin=1.5 * cm,
+            rightMargin=1.5 * cm
+        )
+
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle(
+            "TitleJP",
+            parent=styles["Title"],
+            fontName="HeiseiKakuGo-W5",
+            fontSize=18
+        )
+
+        heading_style = ParagraphStyle(
+            "HeadingJP",
+            parent=styles["Heading2"],
+            fontName="HeiseiKakuGo-W5",
+            spaceBefore=12,
+            spaceAfter=6
+        )
+
+        normal_style = ParagraphStyle(
+            "NormalJP",
+            parent=styles["Normal"],
+            fontName="HeiseiKakuGo-W5",
+            fontSize=9
+        )
+
+        TABLE_STYLE = TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+            ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ])
+
+        elements = []
+
+        # ---- Title / Subject Info ----
+        elements.append(Paragraph("Squat Analysis Clinical Report", title_style))
+        elements.append(Spacer(1, 6))
+
+        info_text = (
+            f"対象者名: {subject_name or '-'} ｜ "
+            f"測定日: {exam_date or '-'} ｜ "
+            f"検者: {examiner_name or '-'}"
+        )
+        elements.append(Paragraph(info_text, normal_style))
+
+        elements.append(
+            Paragraph(
+                f"Bottom frame: {bottom_idx} ／ Standing frame: {standing_idx}",
+                normal_style
+            )
+        )
+        elements.append(Spacer(1, 12))
+
+        # ---- Key Metrics ----
+        elements.append(Paragraph("Key Metrics", heading_style))
+
+        key_metrics_data = [
+            ["Metric", "Right", "Left"],
+            ["Max Hip Flexion (°)", f"{max_hip_flexion_r:.1f}", f"{max_hip_flexion_l:.1f}"],
+            ["Max Knee Flexion (°)", f"{max_knee_flexion_r:.1f}", f"{max_knee_flexion_l:.1f}"],
+            ["Max Ankle Dorsiflexion (°)", f"{max_ankle_flexion_r:.1f}", f"{max_ankle_flexion_l:.1f}"],
+        ]
+        key_metrics_table = Table(key_metrics_data, hAlign="LEFT")
+        key_metrics_table.setStyle(TABLE_STYLE)
+        elements.append(key_metrics_table)
+        elements.append(Spacer(1, 6))
+
+        elements.append(Paragraph(
+            f"Lumbar Compensation: {lumbar_compensation:.1f}°　"
+            f"Pelvic Compensation: {pelvic_compensation:.1f}°　"
+            f"Pelvic Rotation: {pelvic_rotation_rom:.1f}°",
+            normal_style
+        ))
+        elements.append(Spacer(1, 12))
+
+        # ---- Symmetry Analysis ----
+        elements.append(Paragraph("Symmetry Analysis", heading_style))
+
+        symmetry_joints_pdf = {
+            "Hip": ("hip_flexion_r", "hip_flexion_l"),
+            "Knee": ("knee_angle_r", "knee_angle_l"),
+            "Ankle": ("ankle_angle_r", "ankle_angle_l"),
+        }
+
+        for joint_name, (right_var, left_var) in symmetry_joints_pdf.items():
+
+            right_df = phase_summary_df[phase_summary_df["Variable"] == right_var]
+            left_df = phase_summary_df[phase_summary_df["Variable"] == left_var]
+
+            rows = [["Phase", "Right_ROM", "Left_ROM", "Asymmetry_%"]]
+            asym_values = []
+
+            for phase in phase_order:
+                right_rom = right_df[f"{phase}_ROM"].iloc[0]
+                left_rom = left_df[f"{phase}_ROM"].iloc[0]
+
+                asymmetry = 0 if max(right_rom, left_rom) == 0 else (
+                    abs(right_rom - left_rom) / max(right_rom, left_rom) * 100
+                )
+                asym_values.append(asymmetry)
+
+                rows.append([phase, f"{right_rom:.2f}", f"{left_rom:.2f}", f"{asymmetry:.2f}"])
+
+            elements.append(Paragraph(
+                f"{joint_name}  (Max: {max(asym_values):.1f}% / Avg: {np.mean(asym_values):.1f}%)",
+                normal_style
+            ))
+
+            joint_table = Table(rows, hAlign="LEFT")
+            joint_table.setStyle(TABLE_STYLE)
+            elements.append(joint_table)
+            elements.append(Spacer(1, 8))
+
+        # ---- Healthy ROM Comparison ----
+        elements.append(Paragraph("Healthy ROM Comparison", heading_style))
+
+        hrom_rows = [list(comparison_df.columns)]
+        for _, row in comparison_df.iterrows():
+            hrom_rows.append([str(v) for v in row.tolist()])
+
+        hrom_table = Table(hrom_rows, hAlign="LEFT")
+        hrom_table.setStyle(TABLE_STYLE)
+        elements.append(hrom_table)
+        elements.append(Spacer(1, 12))
+
+        # ---- Clinical Findings ----
+        elements.append(Paragraph("Clinical Findings", heading_style))
+
+        pdf_findings = []
+
+        for joint_name in symmetry_joints_pdf.keys():
+            asym_value = asymmetry_results.get(joint_name, 0)
+            if asym_value > 15:
+                pdf_findings.append(f"{joint_name} ROM asymmetry exceeds 15% ({asym_value:.1f}%).")
+
+        for _, row in comparison_df.iterrows():
+            if row["Out_of_Range"]:
+                pdf_findings.append(f"{row['Variable']} ROM outside healthy range.")
+
+        if len(pdf_findings) == 0:
+            elements.append(Paragraph("No major abnormalities detected.", normal_style))
+        else:
+            for item in pdf_findings:
+                elements.append(Paragraph(f"・{item}", normal_style))
+
+        elements.append(Spacer(1, 12))
+
+        # ---- Movement Score ----
+        elements.append(Paragraph("Movement Score", heading_style))
+        elements.append(Paragraph(f"Overall Score: {overall_score} / 100", normal_style))
+        elements.append(Spacer(1, 4))
+
+        feature_rows = [["Feature", "Value"]]
+        for _, row in feature_df.iterrows():
+            feature_rows.append([str(row["Feature"]), str(row["Value"])])
+
+        feature_table = Table(feature_rows, hAlign="LEFT")
+        feature_table.setStyle(TABLE_STYLE)
+        elements.append(feature_table)
+
+        doc.build(elements)
+
+        st.download_button(
+            "📥 Download PDF Report",
+            data=report_buffer.getvalue(),
+            file_name="Squat_Clinical_Report.pdf",
+            mime="application/pdf"
+        )
+
+        st.success("PDFレポートを生成しました。上のボタンからダウンロードしてください。")
