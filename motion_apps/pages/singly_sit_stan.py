@@ -2533,6 +2533,8 @@ with tab8:
             "exam_date": "測定日",
             "examiner": "検者",
             "comment_label": "総合評価 (Clinical Impression)",
+            "auto_generate_button": "🪄 コメントを自動生成（下書き）",
+            "auto_generate_caption": "実測値をもとに下書きコメントを自動生成します。内容を確認・編集してからPDFを生成してください。",
             "generate_button": "PDFレポートを生成",
             "download_label": "📥 PDFレポートをダウンロード",
             "success_message": "PDFレポートを生成しました。上のボタンからダウンロードしてください。",
@@ -2543,12 +2545,141 @@ with tab8:
             "exam_date": "Exam Date",
             "examiner": "Examiner",
             "comment_label": "Clinical Impression",
+            "auto_generate_button": "🪄 Auto-generate Comment (Draft)",
+            "auto_generate_caption": "Generates a draft comment from the measured values. Please review and edit before generating the PDF.",
             "generate_button": "Generate PDF Report",
             "download_label": "📥 Download PDF Report",
             "success_message": "PDF report generated. Use the button above to download.",
         },
     }
+    
     UI = UI_LABELS[lang_code]
+
+    def generate_single_sit_stand_auto_comment(
+        lang_code, analysis_side, overall_score,
+        hip_score, knee_score, ankle_score,
+        lumbar_compensation, pelvis_tilt_compensation, pelvis_rotation_compensation,
+        comparison_display_df
+    ):
+
+        def _resolve_rom_columns(dframe):
+            cols = list(dframe.columns)
+            def find(*keywords):
+                for c in cols:
+                    cl = str(c).lower()
+                    if all(k in cl for k in keywords):
+                        return c
+                return None
+            oor_col = find("out", "range") or find("range")
+            value_col = None
+            for c in cols:
+                if c == oor_col:
+                    continue
+                cl = str(c).lower()
+                if any(k in cl for k in ["subject", "value", "measured", "result"]):
+                    value_col = c
+                    break
+            return value_col, oor_col
+
+        _, oor_col = _resolve_rom_columns(comparison_display_df)
+
+        out_of_range_vars = []
+        if oor_col:
+            out_of_range_vars = [
+                str(row.get("Variable", idx))
+                for idx, row in comparison_display_df.iterrows()
+                if bool(row.get(oor_col, False))
+            ]
+
+        low_mobility = [
+            (label, score)
+            for label, score in [("Hip", hip_score), ("Knee", knee_score), ("Ankle", ankle_score)]
+            if score < 60
+        ]
+
+        if lang_code == "ja":
+
+            side_label = "右" if analysis_side == "Right" else "左"
+
+            if overall_score >= 80:
+                score_line = f"本測定（{side_label}側）の総合スコアは{overall_score}/100と良好で、動作全体のパフォーマンスに大きな問題は見られません。"
+            elif overall_score >= 60:
+                score_line = f"本測定（{side_label}側）の総合スコアは{overall_score}/100であり、動作の一部に改善の余地が見られます。"
+            else:
+                score_line = f"本測定（{side_label}側）の総合スコアは{overall_score}/100であり、動作パターン全体に注意が必要な所見が複数見られます。"
+
+            lines = [score_line]
+
+            if low_mobility:
+                mobility_text = "、".join(f"{label}（スコア{score:.0f}）" for label, score in low_mobility)
+                lines.append(
+                    f"可動域については、{mobility_text}が健常参考値と比べて低下しており、可動性の制限が疑われます。"
+                )
+            else:
+                lines.append("可動域については、股関節・膝関節・足関節ともに健常参考値と比べて概ね良好な範囲に収まっていました。")
+
+            if out_of_range_vars:
+                range_text = "、".join(out_of_range_vars)
+                lines.append(f"健常可動域との比較では、{range_text}が基準範囲外となっていました。")
+
+            compensation_notes = []
+            if lumbar_compensation > 10:
+                compensation_notes.append(f"腰椎伸展の代償動作（{lumbar_compensation:.1f}°）")
+            if pelvis_tilt_compensation > 10:
+                compensation_notes.append(f"骨盤前後傾の代償動作（{pelvis_tilt_compensation:.1f}°）")
+            if pelvis_rotation_compensation > 10:
+                compensation_notes.append(f"骨盤回旋の代償動作（{pelvis_rotation_compensation:.1f}°）")
+
+            if compensation_notes:
+                lines.append(
+                    "体幹・骨盤の代償動作として、" + "、".join(compensation_notes) +
+                    "が観察されており、動作制御の代償パターンとして注意が必要です。"
+                )
+
+            lines.append("以上は実測値からの自動生成による下書きです。臨床所見・触診所見と合わせて内容をご確認のうえ、必要に応じて修正してください。")
+
+            return "\n".join(lines)
+
+        else:
+
+            if overall_score >= 80:
+                score_line = f"The overall score for this {analysis_side}-side trial is {overall_score}/100, indicating generally good movement performance with no major concerns."
+            elif overall_score >= 60:
+                score_line = f"The overall score for this {analysis_side}-side trial is {overall_score}/100, indicating some areas of the movement pattern that could be improved."
+            else:
+                score_line = f"The overall score for this {analysis_side}-side trial is {overall_score}/100, indicating several findings across the movement pattern that warrant attention."
+
+            lines = [score_line]
+
+            if low_mobility:
+                mobility_text = ", ".join(f"{label} (score {score:.0f})" for label, score in low_mobility)
+                lines.append(
+                    f"Regarding range of motion, {mobility_text} fell below the healthy reference, suggesting reduced mobility."
+                )
+            else:
+                lines.append("Regarding range of motion, the hip, knee, and ankle all remained within a generally healthy reference range.")
+
+            if out_of_range_vars:
+                range_text = ", ".join(out_of_range_vars)
+                lines.append(f"Compared to the healthy ROM reference, {range_text} fell outside the reference range.")
+
+            compensation_notes = []
+            if lumbar_compensation > 10:
+                compensation_notes.append(f"lumbar extension compensation ({lumbar_compensation:.1f}°)")
+            if pelvis_tilt_compensation > 10:
+                compensation_notes.append(f"pelvic tilt compensation ({pelvis_tilt_compensation:.1f}°)")
+            if pelvis_rotation_compensation > 10:
+                compensation_notes.append(f"pelvic rotation compensation ({pelvis_rotation_compensation:.1f}°)")
+
+            if compensation_notes:
+                lines.append(
+                    "Trunk/pelvic compensation was observed, including " + ", ".join(compensation_notes) +
+                    ", which should be noted as a compensatory movement pattern."
+                )
+
+            lines.append("This draft was auto-generated from the measured values. Please review it alongside clinical examination and palpation findings, and edit as needed.")
+
+            return "\n".join(lines)
 
     st.header(UI["header"])
     col1, col2, col3 = st.columns(3)
@@ -2558,13 +2689,23 @@ with tab8:
         exam_date = st.text_input(UI["exam_date"], key="pdf_exam_date_single")
     with col3:
         examiner_name = st.text_input(UI["examiner"], key="pdf_examiner_name_single")
+   if st.button(UI["auto_generate_button"], key="pdf_auto_generate_button_single"):
+        st.session_state["pdf_clinical_comment_single"] = generate_single_sit_stand_auto_comment(
+            lang_code, ANALYSIS_SIDE, overall_score,
+            hip_score, knee_score, ankle_score,
+            lumbar_compensation, pelvis_tilt_compensation, pelvis_rotation_compensation,
+            comparison_display_df
+        )
+
+    st.caption(UI["auto_generate_caption"])
+
     clinical_comment = st.text_area(
         UI["comment_label"],
         height=150,
         key="pdf_clinical_comment_single"
     )
-
     if st.button(UI["generate_button"], key="pdf_generate_button_single"):
+
 
         LABELS = {
             "ja": {
