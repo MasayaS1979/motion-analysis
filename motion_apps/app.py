@@ -62,18 +62,20 @@ h1, h2, h3 {
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
  
-/* Card containers (st.container(border=True)) */
-/* Card containers (st.container(border=True)) — 分析カード（Squat/Sit-Standなど）
-   だけにホバー効果を適用したいので、各カードの中に仕込む
-   .analysis-card-marker を含むブロックだけを対象にする */
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.analysis-card-marker) {
+/* Card containers (st.container(border=True)) — 分析カード自身（＝
+   マーカーを直接含み、かつ内側に別のボーダー付きブロックを
+   持たない、一番内側のブロック）だけにホバー効果を適用する。
+   これにより「解析ページ」全体や「Motion Analysis」ページ全体の
+   ような外側の親ブロックが、中のカードにカーソルを合わせただけで
+   一緒に反応してしまう問題を防ぐ。 */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.analysis-card-marker):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .analysis-card-marker)) {
     background-color: #141414;
     border: 1px solid #2a2a2a !important;
     border-radius: 14px !important;
     transition: border-color 0.2s ease, transform 0.15s ease;
 }
 
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.analysis-card-marker):hover {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.analysis-card-marker):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .analysis-card-marker)):hover {
     border-color: var(--accent) !important;
     transform: translateY(-2px);
 }
