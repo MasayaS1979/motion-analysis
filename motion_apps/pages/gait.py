@@ -2107,7 +2107,6 @@ with tab7:
         f"{overall_score}/100"
     )
 
-squat.py/sit_stand.py/arm_flexion.pyと同じ考え方でGaitにも対応させました。ただし歩行周期にはSquat/Sit-Standのような「静止保持局面」が存在しないため、自動コメントの所見はGaitの周期特性に合わせて次のように調整しています。
 
 各フェーズ（Heel Strike/Mid Stance/Toe Off/Swing）でのStd（標準偏差）が大きい関節・フェーズ → ストライド間のばらつき（動作の一貫性低下）を示唆
 各関節（Hip/Knee/Ankle）でROMが最大となるフェーズ → 主要な可動局面を記述
