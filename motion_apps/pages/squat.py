@@ -2241,7 +2241,7 @@ with tab8:
         rom_summary_ax.bar(list(rom_joints_pdf.keys()), rom_summary_values, color="royalblue")
         for i, v in enumerate(rom_summary_values):
             rom_summary_ax.text(i, v, f"{v:.1f}°", ha="center", va="bottom", fontsize=8)
-        rrom_summary_ax.set_ylabel("ROM (deg)")
+        rom_summary_ax.set_ylabel("ROM (deg)")
         rom_summary_ax.set_title("Joint ROM Summary (Whole Trial)")
         rom_summary_ax.grid(alpha=0.3, axis="y")
         elements.append(fig_to_rl_image(rom_summary_fig, width_cm=11))
