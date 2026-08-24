@@ -2008,29 +2008,62 @@ with tab7:
 # PDF Report
 # =========================
 with tab8:
-    st.subheader("PDF Report")
-    st.caption("Squat Analysisの主要な結果をまとめた統合PDFレポートを生成します。")
 
     lang_choice = st.radio(
         "レポート言語 / Report Language",
         ["日本語", "English"],
         horizontal=True
     )
+
     lang_code = "ja" if lang_choice == "日本語" else "en"
+
+    UI_LABELS = {
+        "ja": {
+            "header": "PDFレポート",
+            "caption": "Squat Analysisの主要な結果をまとめた統合PDFレポートを生成します。",
+            "subject_name": "対象者名",
+            "exam_date": "測定日",
+            "examiner": "検者",
+            "comment_heading": "総合評価 (Clinical Impression)",
+            "comment_label": "検者による総合所見・コメントを記入してください（PDFに反映されます）",
+            "generate_button": "📄 PDFレポートを生成",
+            "download_label": "📥 PDFレポートをダウンロード",
+            "success_message": "PDFレポートを生成しました。上のボタンからダウンロードしてください。"
+        },
+        "en": {
+            "header": "PDF Report",
+            "caption": "Generate a comprehensive PDF report summarizing the key Squat Analysis results.",
+            "subject_name": "Subject Name",
+            "exam_date": "Exam Date",
+            "examiner": "Examiner",
+            "comment_heading": "Clinical Impression",
+            "comment_label": "Enter the examiner's overall clinical impression / comments (included in the PDF)",
+            "generate_button": "📄 Generate PDF Report",
+            "download_label": "📥 Download PDF Report",
+            "success_message": "PDF report generated. Use the button above to download it."
+        }
+    }
+
+    UL = UI_LABELS[lang_code]
+
+    st.subheader(UL["header"])
+    st.caption(UL["caption"])
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        subject_name = st.text_input("対象者名", value="")
+        subject_name = st.text_input(UL["subject_name"], value="")
     with col2:
-        exam_date = st.text_input("測定日", value="")
+        exam_date = st.text_input(UL["exam_date"], value="")
     with col3:
-        examiner_name = st.text_input("検者", value="")
-    st.markdown("#### 総合評価 (Clinical Impression)")
+        examiner_name = st.text_input(UL["examiner"], value="")
+
+    st.markdown(f"#### {UL['comment_heading']}")
     clinical_comment = st.text_area(
-        "検者による総合所見・コメントを記入してください（PDFに反映されます）",
+        UL["comment_label"],
         value="",
         height=150
     )
+
     if st.button("📄 Generate PDF Report"):
 
         LABELS = {
