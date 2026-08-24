@@ -2383,9 +2383,9 @@ with tab8:
         elements.append(feature_table)
         doc.build(elements)
         st.download_button(
-            "📥 Download PDF Report",
+            UL["download_label"],
             data=report_buffer.getvalue(),
             file_name="Squat_Clinical_Report.pdf",
             mime="application/pdf"
         )
-        st.success("PDFレポートを生成しました。上のボタンからダウンロードしてください。")
+        st.success(UL["success_message"])
