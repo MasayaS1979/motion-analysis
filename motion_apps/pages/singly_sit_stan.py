@@ -2524,6 +2524,7 @@ with tab8:
         horizontal=True,
         key="pdf_lang_single"
     )
+
     lang_code = "ja" if lang_choice == "日本語" else "en"
 
     UI_LABELS = {
@@ -2552,7 +2553,7 @@ with tab8:
             "success_message": "PDF report generated. Use the button above to download.",
         },
     }
-    
+
     UI = UI_LABELS[lang_code]
 
     def generate_single_sit_stand_auto_comment(
@@ -2564,12 +2565,14 @@ with tab8:
 
         def _resolve_rom_columns(dframe):
             cols = list(dframe.columns)
+
             def find(*keywords):
                 for c in cols:
                     cl = str(c).lower()
                     if all(k in cl for k in keywords):
                         return c
                 return None
+
             oor_col = find("out", "range") or find("range")
             value_col = None
             for c in cols:
@@ -2682,6 +2685,7 @@ with tab8:
             return "\n".join(lines)
 
     st.header(UI["header"])
+
     col1, col2, col3 = st.columns(3)
     with col1:
         subject_name = st.text_input(UI["subject_name"], key="pdf_subject_name_single")
@@ -2689,23 +2693,24 @@ with tab8:
         exam_date = st.text_input(UI["exam_date"], key="pdf_exam_date_single")
     with col3:
         examiner_name = st.text_input(UI["examiner"], key="pdf_examiner_name_single")
+
     if st.button(UI["auto_generate_button"], key="pdf_auto_generate_button_single"):
-         st.session_state["pdf_clinical_comment_single"] = generate_single_sit_stand_auto_comment(
-             lang_code, ANALYSIS_SIDE, overall_score,
-             hip_score, knee_score, ankle_score,
-             lumbar_compensation, pelvis_tilt_compensation, pelvis_rotation_compensation,
-             comparison_display_df
-         )
+        st.session_state["pdf_clinical_comment_single"] = generate_single_sit_stand_auto_comment(
+            lang_code, ANALYSIS_SIDE, overall_score,
+            hip_score, knee_score, ankle_score,
+            lumbar_compensation, pelvis_tilt_compensation, pelvis_rotation_compensation,
+            comparison_display_df
+        )
 
-     st.caption(UI["auto_generate_caption"])
+    st.caption(UI["auto_generate_caption"])
 
-     clinical_comment = st.text_area(
-         UI["comment_label"],
-         height=150,
-         key="pdf_clinical_comment_single"
-     )
-     if st.button(UI["generate_button"], key="pdf_generate_button_single"):
+    clinical_comment = st.text_area(
+        UI["comment_label"],
+        height=150,
+        key="pdf_clinical_comment_single"
+    )
 
+    if st.button(UI["generate_button"], key="pdf_generate_button_single"):
 
         LABELS = {
             "ja": {
@@ -2781,13 +2786,16 @@ with tab8:
                 "feature_col": "Feature", "value_col2": "Value",
             },
         }
+
         LB = LABELS[lang_code]
 
         buf_pdf = BytesIO()
         doc = SimpleDocTemplate(buf_pdf, pagesize=A4,
                                  topMargin=1.5*cm, bottomMargin=1.5*cm,
                                  leftMargin=1.5*cm, rightMargin=1.5*cm)
+
         styles = getSampleStyleSheet()
+
         title_style = ParagraphStyle(
             "TitleJP", parent=styles["Title"],
             fontName="HeiseiKakuGo-W5", fontSize=18, alignment=TA_CENTER
@@ -2807,6 +2815,7 @@ with tab8:
             backColor=colors.HexColor("#1565C0") if ANALYSIS_SIDE == "Right" else colors.HexColor("#C2185B"),
             borderPadding=6
         )
+
         # ---- Overall Score用ハイライトスタイル（コンパクト版） ----
         if overall_score >= 80:
             score_color = colors.HexColor("#2E7D32")
@@ -2814,12 +2823,14 @@ with tab8:
             score_color = colors.HexColor("#F9A825")
         else:
             score_color = colors.HexColor("#C62828")
+
         score_style = ParagraphStyle(
             "ScoreStyle", parent=styles["Normal"],
             fontName="HeiseiKakuGo-W5", fontSize=16, leading=20, alignment=TA_CENTER,
             textColor=colors.white, backColor=score_color,
             borderPadding=6, spaceBefore=6, spaceAfter=8
         )
+
         TABLE_STYLE = TableStyle([
             ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
             ("FONTSIZE", (0, 0), (-1, -1), 9),
@@ -2830,13 +2841,16 @@ with tab8:
         ])
 
         elements = []
+
         elements.append(Paragraph(LB["title"], title_style))
         elements.append(Spacer(1, 0.5*cm))
+
         subject_line = LB["subject_line"].format(
             name=escape(subject_name), date=escape(exam_date), examiner=escape(examiner_name)
         )
         elements.append(Paragraph(subject_line, normal_style))
         elements.append(Spacer(1, 0.3*cm))
+
         elements.append(Paragraph(f"{LB['analysis_side_label']}: {ANALYSIS_SIDE}", badge_style))
         elements.append(Spacer(1, 0.5*cm))
 
@@ -2844,9 +2858,12 @@ with tab8:
         # 注意: matplotlibにCJKフォントが無いため、グラフ内のタイトル/軸ラベル/凡例は
         # 言語選択に関わらず固定の英語表記にしています。
         elements.append(Paragraph(LB["phase_detection_heading"], heading_style))
+
         fig_phase_pdf, ax_phase_pdf = plt.subplots(figsize=(10, 4))
         colors_phase_pdf = {"Sitting": "red", "Rising": "limegreen", "Standing": "dodgerblue", "Lowering": "orange"}
+
         ax_phase_pdf.plot(df.index, signal, color="black", linewidth=1, alpha=0.4)
+
         for phase in phase_order:
             idx = df_phase["Phase"] == phase
             ax_phase_pdf.scatter(
@@ -2856,6 +2873,7 @@ with tab8:
                 s=8,
                 label=phase
             )
+
         ax_phase_pdf.axvline(sitting_idx, color="red", linestyle="--", linewidth=1)
         ax_phase_pdf.axvline(standing_idx, color="dodgerblue", linestyle="--", linewidth=1)
         ax_phase_pdf.set_title("Phase Detection Plot")
@@ -2863,11 +2881,13 @@ with tab8:
         ax_phase_pdf.set_ylabel("Pelvis Vertical Position (m)")
         ax_phase_pdf.legend(loc="upper right", fontsize=8)
         ax_phase_pdf.grid(alpha=0.3)
+
         elements.append(fig_to_rl_image(fig_phase_pdf, width_cm=16))
         elements.append(Spacer(1, 0.5*cm))
 
         # ---- Key Metrics ----
         elements.append(Paragraph(LB["key_metrics_heading"], heading_style))
+
         key_metrics_data = [
             [LB["metric_col"], LB["value_col"]],
             [LB["max_hip_r_row"], f"{max_hip_r:.1f}"],
@@ -2887,17 +2907,21 @@ with tab8:
 
         # ---- Joint ROM Summary (試技全体でのROM。tab6のJoint ROM Summaryと同じ計算) ----
         elements.append(Paragraph(LB["joint_rom_summary_heading"], heading_style))
+
         rom_joints_pdf = {"Hip": HIP, "Knee": KNEE, "Ankle": ANKLE}
         rom_summary_rows = [[LB["joint_col"], LB["rom_col"]]]
         rom_summary_values = []
+
         for joint_name, variable in rom_joints_pdf.items():
             rom_val = df_phase[variable].max() - df_phase[variable].min()
             rom_summary_values.append(rom_val)
             rom_summary_rows.append([joint_name, f"{rom_val:.1f}"])
+
         rom_summary_table = Table(rom_summary_rows, hAlign="LEFT")
         rom_summary_table.setStyle(TABLE_STYLE)
         elements.append(rom_summary_table)
         elements.append(Spacer(1, 0.3*cm))
+
         fig_rom_summary_pdf, ax_rom_summary_pdf = plt.subplots(figsize=(6, 3))
         ax_rom_summary_pdf.bar(list(rom_joints_pdf.keys()), rom_summary_values, color="royalblue")
         for i, v in enumerate(rom_summary_values):
@@ -2910,6 +2934,7 @@ with tab8:
 
         # ---- Joint ROM Analysis (healthy reference + score つき、既存のロジック) ----
         elements.append(Paragraph(LB["joint_rom_analysis_heading"].format(side=ANALYSIS_SIDE), heading_style))
+
         rom_analysis_data = [
             [LB["joint_col"], LB["rom_col"], LB["healthy_ref_col"], LB["jra_score_col"]],
             ["Hip", f"{hip_rom:.1f}", f"{healthy_hip_rom}", f"{hip_score:.0f}"],
@@ -2920,6 +2945,7 @@ with tab8:
         rom_analysis_table.setStyle(TABLE_STYLE)
         elements.append(rom_analysis_table)
         elements.append(Spacer(1, 0.3*cm))
+
         fig_rom_pdf, ax_rom_pdf = plt.subplots(figsize=(8, 4))
         joint_labels = ["Hip", "Knee", "Ankle"]
         subject_values = [hip_rom, knee_rom, ankle_rom]
@@ -2939,12 +2965,14 @@ with tab8:
 
         def _resolve_rom_columns(dframe):
             cols = list(dframe.columns)
+
             def find(*keywords):
                 for c in cols:
                     cl = str(c).lower()
                     if all(k in cl for k in keywords):
                         return c
                 return None
+
             oor_col = find("out", "range") or find("range")
             min_col = find("min")
             max_col = find("max")
@@ -2994,23 +3022,28 @@ with tab8:
                 bar_colors = ["crimson" if bool(v) else "seagreen" for v in comparison_display_df[OOR_COL]]
             else:
                 bar_colors = "seagreen"
+
             fig_healthy_pdf, ax_healthy_pdf = plt.subplots(figsize=(10, 4))
             ax_healthy_pdf.bar(comparison_display_df.index.astype(str), comparison_display_df[VALUE_COL], color=bar_colors)
             ax_healthy_pdf.set_ylabel("Value")
             ax_healthy_pdf.tick_params(axis="x", rotation=45)
             elements.append(fig_to_rl_image(fig_healthy_pdf, width_cm=16))
+
         elements.append(Spacer(1, 0.5*cm))
 
         # ---- Clinical Findings ----
         elements.append(Paragraph(LB["clinical_findings_heading"], heading_style))
+
         findings = []
         if OOR_COL:
             for idx, row in comparison_display_df.iterrows():
                 if bool(row.get(OOR_COL, False)):
                     findings.append(LB["range_finding"].format(var=row.get("Variable", idx)))
+
         for label, score in [("Hip", hip_score), ("Knee", knee_score), ("Ankle", ankle_score)]:
             if score < 60:
                 findings.append(LB["low_score_finding"].format(label=label, score=score))
+
         findings_text = "<br/>".join(findings) if findings else LB["no_findings"]
         elements.append(Paragraph(findings_text, normal_style))
         elements.append(Spacer(1, 0.5*cm))
@@ -3044,6 +3077,7 @@ with tab8:
 
         doc.build(elements)
         buf_pdf.seek(0)
+
         st.download_button(
             label=UI["download_label"],
             data=buf_pdf,
@@ -3051,4 +3085,5 @@ with tab8:
             mime="application/pdf",
             key="pdf_download_button_single"
         )
+
         st.success(UI["success_message"])
