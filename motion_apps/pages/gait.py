@@ -2107,6 +2107,15 @@ with tab7:
         f"{overall_score}/100"
     )
 
+squat.py/sit_stand.py/arm_flexion.pyと同じ考え方でGaitにも対応させました。ただし歩行周期にはSquat/Sit-Standのような「静止保持局面」が存在しないため、自動コメントの所見はGaitの周期特性に合わせて次のように調整しています。
+
+各フェーズ（Heel Strike/Mid Stance/Toe Off/Swing）でのStd（標準偏差）が大きい関節・フェーズ → ストライド間のばらつき（動作の一貫性低下）を示唆
+各関節（Hip/Knee/Ankle）でROMが最大となるフェーズ → 主要な可動局面を記述
+Mid Stance（立脚中期）とSwing（遊脚期）のROM差が15%を超える場合 → 立脚時の制御と遊脚時の下肢前方移動の間で動作パターンに差があることを示唆
+
+Phase Statistics表はHip(R/L)、Knee(R/L)、Ankle(R/L)、Pelvic Tilt、Pelvic Rotation、Pelvic Obliquity、Lumbar Extensionを対象にしています（Pelvic Obliquityは既存のKey Metrics/自動コメントで既に扱われているため含めています）。tab8全コードです。
+
+python
 # =========================
 # PDF Report
 # =========================
@@ -2148,13 +2157,85 @@ with tab8:
         }
     }
     UL = UI_LABELS[lang_code]
-
     def generate_gait_auto_comment(
         lang_code, overall_score, gait_asymmetry_results, comparison_df,
         cadence, lumbar_extension_rom, pelvis_tilt_rom, pelvis_rotation_rom,
-        pelvic_obliquity_rom
+        pelvic_obliquity_rom, phase_summary_df, phase_order
     ):
         lines = []
+
+        # ---- Phase Statistics由来の所見 ----
+        phase_stats_variables = {
+            "Hip (R)": "hip_flexion_r",
+            "Hip (L)": "hip_flexion_l",
+            "Knee (R)": "knee_angle_r",
+            "Knee (L)": "knee_angle_l",
+            "Ankle (R)": "ankle_angle_r",
+            "Ankle (L)": "ankle_angle_l",
+            "Pelvic Tilt": "pelvis_tilt",
+            "Pelvic Rotation": "pelvis_rotation",
+            "Pelvic Obliquity": "pelvis_list",
+            "Lumbar Extension": "lumbar_extension",
+        }
+        joint_pairs = {
+            "Hip": ("hip_flexion_r", "hip_flexion_l"),
+            "Knee": ("knee_angle_r", "knee_angle_l"),
+            "Ankle": ("ankle_angle_r", "ankle_angle_l"),
+        }
+
+        # 1) 各フェーズでのStd（標準偏差）が大きい = ストライド間のばらつきが大きい
+        # 歩行にはSquat/Sit-Standのような「静止保持局面」が無いため、
+        # 全フェーズを対象にばらつき（動作の再現性）として評価する。
+        # ※ しきい値2.0°は仮の基準です。臨床基準に合わせて調整してください。
+        STD_THRESHOLD = 2.0
+        variability_flags = []
+        for stat_label, variable in phase_stats_variables.items():
+            var_row = phase_summary_df[phase_summary_df["Variable"] == variable]
+            if len(var_row) == 0:
+                continue
+            for phase in phase_order:
+                std_v = var_row[f"{phase}_Std"].iloc[0]
+                if pd.notna(std_v) and std_v > STD_THRESHOLD:
+                    variability_flags.append((stat_label, phase, std_v))
+
+        # 2) 各関節でROMが最大となるフェーズ（主要な可動局面）
+        dominant_phase_per_joint = {}
+        for joint_name, (right_var, left_var) in joint_pairs.items():
+            right_row = phase_summary_df[phase_summary_df["Variable"] == right_var]
+            left_row = phase_summary_df[phase_summary_df["Variable"] == left_var]
+            if len(right_row) == 0 or len(left_row) == 0:
+                continue
+            avg_rom_by_phase = {}
+            for phase in phase_order:
+                r_val = right_row[f"{phase}_ROM"].iloc[0]
+                l_val = left_row[f"{phase}_ROM"].iloc[0]
+                avg_rom_by_phase[phase] = np.nanmean([r_val, l_val])
+            dominant_phase_per_joint[joint_name] = max(avg_rom_by_phase, key=avg_rom_by_phase.get)
+
+        # 3) Mid Stance（立脚中期）と Swing（遊脚期）のROM差
+        # 立脚時の制御と遊脚時の下肢前方移動という、歩行周期における
+        # 代表的な2局面を比較する（Squat/Sit-StandのDescending/Ascendingに相当）。
+        # ※ しきい値15%は左右対称性と同じ基準を仮採用しています。
+        stance_swing_flags = []
+        for joint_name, (right_var, left_var) in joint_pairs.items():
+            right_row = phase_summary_df[phase_summary_df["Variable"] == right_var]
+            left_row = phase_summary_df[phase_summary_df["Variable"] == left_var]
+            if len(right_row) == 0 or len(left_row) == 0:
+                continue
+            stance_avg = np.nanmean([
+                right_row["Mid Stance_ROM"].iloc[0],
+                left_row["Mid Stance_ROM"].iloc[0]
+            ])
+            swing_avg = np.nanmean([
+                right_row["Swing_ROM"].iloc[0],
+                left_row["Swing_ROM"].iloc[0]
+            ])
+            if max(stance_avg, swing_avg) == 0:
+                continue
+            diff_pct = abs(stance_avg - swing_avg) / max(stance_avg, swing_avg) * 100
+            if diff_pct > 15:
+                stance_swing_flags.append((joint_name, stance_avg, swing_avg, diff_pct))
+
         if lang_code == "ja":
             if overall_score >= 80:
                 lines.append(f"総合スコアは{overall_score}点であり、良好な歩行パターンを示している。")
@@ -2162,20 +2243,16 @@ with tab8:
                 lines.append(f"総合スコアは{overall_score}点であり、軽度から中等度の歩行パターンの逸脱が見られる。")
             else:
                 lines.append(f"総合スコアは{overall_score}点であり、歩行パターンに明らかな逸脱が見られる。")
-
             if cadence < 90:
                 lines.append(f"ケイデンスは{cadence:.1f}歩/分であり、正常範囲を下回っている。")
             elif cadence > 130:
                 lines.append(f"ケイデンスは{cadence:.1f}歩/分であり、正常範囲を上回っている。")
-
             for joint_name, asym_value in gait_asymmetry_results.items():
                 if asym_value > 15:
                     lines.append(f"{joint_name}関節のROM非対称性が{asym_value:.1f}%と、15%の基準値を超えている。")
-
             abnormal_vars = comparison_df[comparison_df["Status"] == "Abnormal"]["Variable"].tolist()
             if len(abnormal_vars) > 0:
                 lines.append("健常者ROMとの比較において、" + "、".join(str(v) for v in abnormal_vars) + "が基準範囲外であった。")
-
             compensation_notes = []
             if lumbar_extension_rom > 10:
                 compensation_notes.append(f"腰椎伸展（{lumbar_extension_rom:.1f}°）")
@@ -2187,10 +2264,30 @@ with tab8:
                 compensation_notes.append(f"骨盤側方傾斜（{pelvic_obliquity_rom:.1f}°）")
             if compensation_notes:
                 lines.append("、".join(compensation_notes) + "の可動域が大きく、代償動作の可能性がある。")
-
+            if variability_flags:
+                var_text = "、".join(f"{phase}フェーズの{label}" for label, phase, std_v in variability_flags[:6])
+                lines.append(
+                    f"フェーズ別のばらつきについては、{var_text}で標準偏差が大きく、"
+                    "ストライド間での動作の再現性（一貫性）低下が疑われる。"
+                )
+            else:
+                lines.append("フェーズ別のばらつきについては、標準偏差の観点から顕著な逸脱は見られなかった。")
+            if dominant_phase_per_joint:
+                dominant_text = "、".join(f"{joint}は{phase}フェーズ" for joint, phase in dominant_phase_per_joint.items())
+                lines.append(f"各関節の主要な可動局面は、{dominant_text}で最大のROMを示している。")
+            if stance_swing_flags:
+                ss_text = "、".join(
+                    f"{joint}（立脚中期 {stance:.1f}° ／ 遊脚期 {swing:.1f}°、差 {diff:.1f}%）"
+                    for joint, stance, swing, diff in stance_swing_flags
+                )
+                lines.append(
+                    f"立脚中期（Mid Stance）と遊脚期（Swing）の可動域を比較すると、{ss_text}で15%を超える差が見られ、"
+                    "立脚時の制御と遊脚時の下肢前方移動の間で動作パターンに違いがある可能性がある。"
+                )
+            else:
+                lines.append("立脚中期と遊脚期のROMを比較すると、いずれの関節も15%以内の差に収まっており、局面間で大きな制御の差は見られなかった。")
             if len(lines) <= 1:
                 lines.append("その他、顕著な代償動作や左右差は認められなかった。")
-
             lines.append("")
             lines.append("※本コメントは計測データに基づく自動生成の下書きです。実際の触診・観察所見と照らし合わせた上で、検者が内容を確認・修正してください。")
         else:
@@ -2200,20 +2297,16 @@ with tab8:
                 lines.append(f"The overall score is {overall_score}, indicating mild to moderate deviation from a typical gait pattern.")
             else:
                 lines.append(f"The overall score is {overall_score}, indicating a clear deviation from a typical gait pattern.")
-
             if cadence < 90:
                 lines.append(f"Cadence is {cadence:.1f} steps/min, below the normal range.")
             elif cadence > 130:
                 lines.append(f"Cadence is {cadence:.1f} steps/min, above the normal range.")
-
             for joint_name, asym_value in gait_asymmetry_results.items():
                 if asym_value > 15:
                     lines.append(f"{joint_name} ROM asymmetry is {asym_value:.1f}%, exceeding the 15% threshold.")
-
             abnormal_vars = comparison_df[comparison_df["Status"] == "Abnormal"]["Variable"].tolist()
             if len(abnormal_vars) > 0:
                 lines.append("Compared to healthy reference ROM, the following variables were outside the normal range: " + ", ".join(str(v) for v in abnormal_vars) + ".")
-
             compensation_notes = []
             if lumbar_extension_rom > 10:
                 compensation_notes.append(f"lumbar extension ({lumbar_extension_rom:.1f}°)")
@@ -2225,14 +2318,33 @@ with tab8:
                 compensation_notes.append(f"pelvic obliquity ({pelvic_obliquity_rom:.1f}°)")
             if compensation_notes:
                 lines.append("Increased range noted in " + ", ".join(compensation_notes) + ", suggesting possible compensatory movement.")
-
+            if variability_flags:
+                var_text = ", ".join(f"{label} during {phase}" for label, phase, std_v in variability_flags[:6])
+                lines.append(
+                    f"Regarding phase-by-phase variability, elevated standard deviation was observed for {var_text}, "
+                    "suggesting possible reduced stride-to-stride consistency."
+                )
+            else:
+                lines.append("Regarding phase-by-phase variability, no notable deviation was observed based on standard deviation.")
+            if dominant_phase_per_joint:
+                dominant_text = ", ".join(f"{joint} peaks during {phase}" for joint, phase in dominant_phase_per_joint.items())
+                lines.append(f"The dominant phase of motion for each joint was as follows: {dominant_text}.")
+            if stance_swing_flags:
+                ss_text = ", ".join(
+                    f"{joint} (Mid Stance {stance:.1f}° / Swing {swing:.1f}°, diff {diff:.1f}%)"
+                    for joint, stance, swing, diff in stance_swing_flags
+                )
+                lines.append(
+                    f"Comparing Mid Stance and Swing, a difference exceeding 15% was observed for {ss_text}, "
+                    "suggesting a possible difference in motor control between stance-phase stability and swing-phase limb advancement."
+                )
+            else:
+                lines.append("Comparing Mid Stance and Swing, all joints remained within a 15% difference, with no major difference in control between phases.")
             if len(lines) <= 1:
                 lines.append("No other significant compensations or asymmetries were noted.")
-
             lines.append("")
             lines.append("Note: This comment is an automatically generated draft based on measured data. Please review and revise it against actual palpation and observational findings before finalizing.")
         return "\n".join(lines)
-
     st.subheader(UL["header"])
     st.caption(UL["caption"])
     col1, col2, col3 = st.columns(3)
@@ -2242,27 +2354,21 @@ with tab8:
         exam_date = st.text_input(UL["exam_date"], value="")
     with col3:
         examiner_name = st.text_input(UL["examiner"], value="")
-
     st.markdown(f"#### {UL['comment_heading']}")
-
     if "gait_clinical_comment" not in st.session_state:
         st.session_state["gait_clinical_comment"] = ""
-
     if st.button(UL["auto_generate_button"]):
         st.session_state["gait_clinical_comment"] = generate_gait_auto_comment(
             lang_code, overall_score, gait_asymmetry_results, comparison_df,
             cadence, lumbar_extension_rom, pelvis_tilt_rom, pelvis_rotation_rom,
-            pelvic_obliquity_rom
+            pelvic_obliquity_rom, phase_summary_df, phase_order
         )
-
     st.caption(UL["auto_generate_caption"])
-
     clinical_comment = st.text_area(
         UL["comment_label"],
         key="gait_clinical_comment",
         height=150
     )
-
     if st.button(UL["generate_button"]):
         LABELS = {
             "ja": {
@@ -2283,6 +2389,14 @@ with tab8:
                 "joint_col": "関節",
                 "right_rom_col": "右 ROM (°)",
                 "left_rom_col": "左 ROM (°)",
+                "phase_stats_heading": "フェーズ別統計（Min/Max/Mean/Std/ROM）",
+                "phase_label": "フェーズ",
+                "ps_variable_col": "項目",
+                "ps_min_col": "最小",
+                "ps_max_col": "最大",
+                "ps_mean_col": "平均",
+                "ps_std_col": "標準偏差",
+                "ps_rom_col": "ROM (°)",
                 "symmetry_heading": "左右対称性分析",
                 "max_avg_label": "{joint}　（最大: {max_val:.1f}% ／ 平均: {avg_val:.1f}%）",
                 "phase_col": "相",
@@ -2321,6 +2435,14 @@ with tab8:
                 "joint_col": "Joint",
                 "right_rom_col": "Right ROM (°)",
                 "left_rom_col": "Left ROM (°)",
+                "phase_stats_heading": "Phase Statistics (Min/Max/Mean/Std/ROM)",
+                "phase_label": "Phase",
+                "ps_variable_col": "Variable",
+                "ps_min_col": "Min",
+                "ps_max_col": "Max",
+                "ps_mean_col": "Mean",
+                "ps_std_col": "Std",
+                "ps_rom_col": "ROM (deg)",
                 "symmetry_heading": "Symmetry Analysis",
                 "max_avg_label": "{joint}  (Max: {max_val:.1f}% / Avg: {avg_val:.1f}%)",
                 "phase_col": "Phase",
@@ -2510,6 +2632,51 @@ with tab8:
         rom_summary_ax.grid(alpha=0.3, axis="y")
         elements.append(fig_to_rl_image(rom_summary_fig, width_cm=12))
         elements.append(Spacer(1, 12))
+        # ---- Phase Statistics (Min/Max/Mean/Std/ROM per Phase) ----
+        elements.append(Paragraph(LB["phase_stats_heading"], heading_style))
+        phase_stats_variables = {
+            "Hip (R)": "hip_flexion_r",
+            "Hip (L)": "hip_flexion_l",
+            "Knee (R)": "knee_angle_r",
+            "Knee (L)": "knee_angle_l",
+            "Ankle (R)": "ankle_angle_r",
+            "Ankle (L)": "ankle_angle_l",
+            "Pelvic Tilt": "pelvis_tilt",
+            "Pelvic Rotation": "pelvis_rotation",
+            "Pelvic Obliquity": "pelvis_list",
+            "Lumbar Extension": "lumbar_extension",
+        }
+        for phase in phase_order:
+            elements.append(Paragraph(
+                f"{LB['phase_label']}: {phase}",
+                normal_style
+            ))
+            phase_stats_rows = [[
+                LB["ps_variable_col"], LB["ps_min_col"], LB["ps_max_col"],
+                LB["ps_mean_col"], LB["ps_std_col"], LB["ps_rom_col"]
+            ]]
+            for stat_label, variable in phase_stats_variables.items():
+                var_row = phase_summary_df[phase_summary_df["Variable"] == variable]
+                if len(var_row) == 0:
+                    continue
+                min_v = var_row[f"{phase}_Min"].iloc[0]
+                max_v = var_row[f"{phase}_Max"].iloc[0]
+                mean_v = var_row[f"{phase}_Mean"].iloc[0]
+                std_v = var_row[f"{phase}_Std"].iloc[0]
+                rom_v = var_row[f"{phase}_ROM"].iloc[0]
+                phase_stats_rows.append([
+                    stat_label,
+                    f"{min_v:.1f}" if pd.notna(min_v) else "-",
+                    f"{max_v:.1f}" if pd.notna(max_v) else "-",
+                    f"{mean_v:.1f}" if pd.notna(mean_v) else "-",
+                    f"{std_v:.1f}" if pd.notna(std_v) else "-",
+                    f"{rom_v:.1f}" if pd.notna(rom_v) else "-",
+                ])
+            phase_stats_table = Table(phase_stats_rows, hAlign="LEFT")
+            phase_stats_table.setStyle(TABLE_STYLE)
+            elements.append(phase_stats_table)
+            elements.append(Spacer(1, 8))
+        elements.append(Spacer(1, 4))
         # ---- Symmetry Analysis (表 + グラフ) ----
         elements.append(Paragraph(LB["symmetry_heading"], heading_style))
         symmetry_joints_pdf = {
