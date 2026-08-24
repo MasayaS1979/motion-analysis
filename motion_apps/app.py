@@ -1,5 +1,9 @@
 import streamlit as st
 from i18n import t, language_switcher
+from pathlib import Path
+
+APP_DIR = Path(__file__).parent
+GUIDE_PDF_PATH = APP_DIR / "MotionAnalysis_UserGuide.pdf"
  
 # =========================
 # Page Config
@@ -298,12 +302,8 @@ with tab_analysis:
 # User Guide Tab
 # =========================
 with tab_guide:
- 
-    st.header(t("app.guide_header"))
-    st.caption(t("app.guide_caption"))
- 
-    try:
-        with open("MotionAnalysis_UserGuide.pdf", "rb") as pdf_file:
+ try:
+        with open(GUIDE_PDF_PATH, "rb") as pdf_file:
             st.download_button(
                 label=t("app.sidebar_download_guide"),
                 data=pdf_file.read(),
@@ -311,9 +311,13 @@ with tab_guide:
                 mime="application/pdf",
                 key="tab_download_guide"
             )
- 
+
         st.success(t("app.guide_success"))
- 
+
+        st.markdown(t("app.guide_content"))
+
+    except FileNotFoundError:
+        st.error(t("app.guide_error"))
         st.markdown(t("app.guide_content"))
  
     except FileNotFoundError:
