@@ -1863,22 +1863,116 @@ with tab7:
 # PDF Report
 # =========================
 with tab8:
-    st.subheader("PDF Report")
-    st.caption("Arm Flexion Analysisの主要な結果をまとめた統合PDFレポートを生成します。")
+
+    lang_choice = st.radio(
+        "レポート言語 / Report Language",
+        ["日本語", "English"],
+        horizontal=True,
+        key="pdf_lang_arm"
+    )
+    lang_code = "ja" if lang_choice == "日本語" else "en"
+
+    UI_LABELS = {
+        "ja": {
+            "header": "PDFレポート",
+            "caption": "Arm Flexion Analysisの主要な結果をまとめた統合PDFレポートを生成します。",
+            "subject_name": "対象者名",
+            "exam_date": "測定日",
+            "examiner": "検者",
+            "comment_heading": "#### 総合評価 (Clinical Impression)",
+            "comment_label": "検者による総合所見・コメントを記入してください（PDFに反映されます）",
+            "generate_button": "📄 PDFレポートを生成",
+            "download_label": "📥 PDFレポートをダウンロード",
+            "success_message": "PDFレポートを生成しました。上のボタンからダウンロードしてください。",
+        },
+        "en": {
+            "header": "PDF Report",
+            "caption": "Generate an integrated PDF report summarizing the key Arm Flexion Analysis results.",
+            "subject_name": "Subject Name",
+            "exam_date": "Exam Date",
+            "examiner": "Examiner",
+            "comment_heading": "#### Clinical Impression",
+            "comment_label": "Enter the examiner's overall clinical impression (included in the PDF)",
+            "generate_button": "📄 Generate PDF Report",
+            "download_label": "📥 Download PDF Report",
+            "success_message": "PDF report generated. Use the button above to download.",
+        },
+    }
+    UI = UI_LABELS[lang_code]
+
+    st.subheader(UI["header"])
+    st.caption(UI["caption"])
     col1, col2, col3 = st.columns(3)
     with col1:
-        subject_name = st.text_input("対象者名", value="")
+        subject_name = st.text_input(UI["subject_name"], value="", key="pdf_subject_name_arm")
     with col2:
-        exam_date = st.text_input("測定日", value="")
+        exam_date = st.text_input(UI["exam_date"], value="", key="pdf_exam_date_arm")
     with col3:
-        examiner_name = st.text_input("検者", value="")
-    st.markdown("#### 総合評価 (Clinical Impression)")
+        examiner_name = st.text_input(UI["examiner"], value="", key="pdf_examiner_name_arm")
+    st.markdown(UI["comment_heading"])
     clinical_comment = st.text_area(
-        "検者による総合所見・コメントを記入してください（PDFに反映されます）",
+        UI["comment_label"],
         value="",
-        height=150
+        height=150,
+        key="pdf_clinical_comment_arm"
     )
-    if st.button("📄 Generate PDF Report"):
+
+    if st.button(UI["generate_button"], key="pdf_generate_button_arm"):
+
+        LABELS = {
+            "ja": {
+                "title": "Arm Flexion Analysis 臨床レポート",
+                "subject_line": "対象者名: {name}　測定日: {date}　検者: {examiner}",
+                "phase_detection_heading": "位相検出プロット",
+                "key_metrics_heading": "主要指標",
+                "metric_col": "指標", "right_col": "右", "left_col": "左",
+                "max_shoulder_row": "最大肩関節屈曲 (°)",
+                "compensation_line": "腰椎代償: {l:.1f}°　骨盤代償: {p:.1f}°　骨盤回旋: {r:.1f}°",
+                "joint_rom_summary_heading": "関節可動域サマリー（試技全体）",
+                "joint_col": "関節", "rom_col": "可動域 (°)",
+                "symmetry_heading": "左右対称性分析",
+                "phase_col": "フェーズ", "right_rom_col": "右ROM", "left_rom_col": "左ROM", "asym_col": "非対称性(%)",
+                "max_avg_label": "{joint}　(最大: {mx:.1f}% / 平均: {avg:.1f}%)",
+                "max_avg_na_label": "{joint}　(データなし)",
+                "healthy_rom_heading": "健常可動域比較",
+                "clinical_findings_heading": "臨床所見",
+                "no_findings": "重大な異常所見は検出されませんでした。",
+                "asym_finding": "{joint}の可動域非対称性が15%を超えています（{v:.1f}%）。",
+                "range_finding": "{var} の可動域が健常範囲外です。",
+                "clinical_impression_heading": "Clinical Impression（総合評価）",
+                "no_comment": "(記入なし)",
+                "movement_score_heading": "動作スコア",
+                "overall_score_label": "総合スコア: {s} / 100",
+                "feature_col": "特徴量", "value_col": "値",
+            },
+            "en": {
+                "title": "Arm Flexion Analysis Clinical Report",
+                "subject_line": "Subject Name: {name}  Exam Date: {date}  Examiner: {examiner}",
+                "phase_detection_heading": "Phase Detection Plot",
+                "key_metrics_heading": "Key Metrics",
+                "metric_col": "Metric", "right_col": "Right", "left_col": "Left",
+                "max_shoulder_row": "Max Shoulder Flexion (°)",
+                "compensation_line": "Lumbar Compensation: {l:.1f}°  Pelvis Compensation: {p:.1f}°  Pelvic Rotation: {r:.1f}°",
+                "joint_rom_summary_heading": "Joint ROM Summary (Whole Trial)",
+                "joint_col": "Joint", "rom_col": "ROM (deg)",
+                "symmetry_heading": "Symmetry Analysis",
+                "phase_col": "Phase", "right_rom_col": "Right_ROM", "left_rom_col": "Left_ROM", "asym_col": "Asymmetry_%",
+                "max_avg_label": "{joint}  (Max: {mx:.1f}% / Avg: {avg:.1f}%)",
+                "max_avg_na_label": "{joint}  (N/A)",
+                "healthy_rom_heading": "Healthy ROM Comparison",
+                "clinical_findings_heading": "Clinical Findings",
+                "no_findings": "No major abnormalities detected.",
+                "asym_finding": "{joint} ROM asymmetry exceeds 15% ({v:.1f}%).",
+                "range_finding": "{var} ROM outside healthy range.",
+                "clinical_impression_heading": "Clinical Impression",
+                "no_comment": "(No comment entered)",
+                "movement_score_heading": "Movement Score",
+                "overall_score_label": "OVERALL SCORE: {s} / 100",
+                "feature_col": "Feature", "value_col": "Value",
+            },
+        }
+        LB = LABELS[lang_code]
+
         report_buffer = BytesIO()
         doc = SimpleDocTemplate(
             report_buffer,
@@ -1901,7 +1995,7 @@ with tab8:
             "NormalJP", parent=styles["Normal"],
             fontName="HeiseiKakuGo-W5", fontSize=9
         )
-        # ---- Overall Score用ハイライトスタイル ----
+        # ---- Overall Score用ハイライトスタイル（コンパクト版） ----
         if overall_score >= 80:
             score_color = colors.HexColor("#1B7A3D")   # 緑
         elif overall_score >= 60:
@@ -1912,14 +2006,14 @@ with tab8:
             "ScoreStyle",
             parent=styles["Normal"],
             fontName="HeiseiKakuGo-W5",
-            fontSize=28,
-            leading=34,
+            fontSize=16,
+            leading=20,
             textColor=colors.white,
             backColor=score_color,
             alignment=TA_CENTER,
             spaceBefore=6,
-            spaceAfter=10,
-            borderPadding=8
+            spaceAfter=8,
+            borderPadding=6
         )
         # ※ しきい値(80/60)は仮の基準です。臨床基準に合わせて調整してください。
         TABLE_STYLE = TableStyle([
@@ -1937,17 +2031,17 @@ with tab8:
         }
         elements = []
         # ---- Title / Subject Info ----
-        elements.append(Paragraph("Arm Flexion Analysis Clinical Report", title_style))
+        elements.append(Paragraph(LB["title"], title_style))
         elements.append(Spacer(1, 6))
-        info_text = (
-            f"対象者名: {subject_name or '-'} ｜ "
-            f"測定日: {exam_date or '-'} ｜ "
-            f"検者: {examiner_name or '-'}"
+        info_text = LB["subject_line"].format(
+            name=subject_name or "-", date=exam_date or "-", examiner=examiner_name or "-"
         )
         elements.append(Paragraph(info_text, normal_style))
         elements.append(Spacer(1, 12))
         # ---- Phase Detection Plot ----
-        elements.append(Paragraph("Phase Detection Plot", heading_style))
+        # 注意: matplotlibにCJKフォントが無いため、グラフ内のタイトル/軸ラベル/凡例は
+        # 言語選択に関わらず固定の英語表記にしています。
+        elements.append(Paragraph(LB["phase_detection_heading"], heading_style))
         pdf_phase_fig, pdf_phase_ax = plt.subplots(figsize=(10, 4))
         pdf_phase_ax.plot(
             df_phase.index, arm_flexion,
@@ -1970,31 +2064,59 @@ with tab8:
         elements.append(fig_to_rl_image(pdf_phase_fig, width_cm=16))
         elements.append(Spacer(1, 12))
         # ---- Key Metrics ----
-        elements.append(Paragraph("Key Metrics", heading_style))
+        elements.append(Paragraph(LB["key_metrics_heading"], heading_style))
         key_metrics_data = [
-            ["Metric", "Right", "Left"],
-            ["Max Shoulder Flexion (°)", f"{max_arm_flexion_r:.1f}", f"{max_arm_flexion_l:.1f}"],
+            [LB["metric_col"], LB["right_col"], LB["left_col"]],
+            [LB["max_shoulder_row"], f"{max_arm_flexion_r:.1f}", f"{max_arm_flexion_l:.1f}"],
         ]
         key_metrics_table = Table(key_metrics_data, hAlign="LEFT")
         key_metrics_table.setStyle(TABLE_STYLE)
         elements.append(key_metrics_table)
         elements.append(Spacer(1, 6))
         elements.append(Paragraph(
-            f"Lumbar Compensation: {lumbar_compensation:.1f}°　"
-            f"Pelvis Compensation: {pelvis_compensation:.1f}°　"
-            f"Pelvic Rotation: {pelvis_rotation_compensation:.1f}°",
+            LB["compensation_line"].format(
+                l=lumbar_compensation, p=pelvis_compensation, r=pelvis_rotation_compensation
+            ),
             normal_style
         ))
         elements.append(Spacer(1, 12))
+        # ---- Joint ROM Summary (試技全体でのROM。tab6のJoint ROM Summaryと同じ計算) ----
+        elements.append(Paragraph(LB["joint_rom_summary_heading"], heading_style))
+        rom_joints_pdf = {
+            "Right Shoulder": "arm_flex_r",
+            "Left Shoulder": "arm_flex_l",
+            "Lumbar": "lumbar_extension",
+            "Pelvis Tilt": "pelvis_tilt",
+        }
+        rom_summary_rows = [[LB["joint_col"], LB["rom_col"]]]
+        rom_summary_values = []
+        for joint_name, variable in rom_joints_pdf.items():
+            rom_val = df_phase[variable].max() - df_phase[variable].min()
+            rom_summary_values.append(rom_val)
+            rom_summary_rows.append([joint_name, f"{rom_val:.1f}"])
+        rom_summary_table = Table(rom_summary_rows, hAlign="LEFT")
+        rom_summary_table.setStyle(TABLE_STYLE)
+        elements.append(rom_summary_table)
+        elements.append(Spacer(1, 6))
+        rom_summary_fig, rom_summary_ax = plt.subplots(figsize=(7, 3))
+        rom_summary_ax.bar(list(rom_joints_pdf.keys()), rom_summary_values, color="royalblue")
+        for i, v in enumerate(rom_summary_values):
+            rom_summary_ax.text(i, v, f"{v:.1f}°", ha="center", va="bottom", fontsize=8)
+        rom_summary_ax.set_ylabel("ROM (deg)")
+        rom_summary_ax.set_title("Joint ROM Summary (Whole Trial)")
+        rom_summary_ax.grid(alpha=0.3, axis="y")
+        plt.setp(rom_summary_ax.get_xticklabels(), rotation=15, fontsize=8)
+        elements.append(fig_to_rl_image(rom_summary_fig, width_cm=12))
+        elements.append(Spacer(1, 12))
         # ---- Symmetry Analysis (表 + グラフ) ----
-        elements.append(Paragraph("Symmetry Analysis", heading_style))
+        elements.append(Paragraph(LB["symmetry_heading"], heading_style))
         symmetry_joints_pdf = {
             "Shoulder": ("arm_flex_r", "arm_flex_l"),
         }
         for joint_name, (right_var, left_var) in symmetry_joints_pdf.items():
             right_df = phase_summary_df[phase_summary_df["Variable"] == right_var]
             left_df = phase_summary_df[phase_summary_df["Variable"] == left_var]
-            rows = [["Phase", "Right_ROM", "Left_ROM", "Asymmetry_%"]]
+            rows = [[LB["phase_col"], LB["right_rom_col"], LB["left_rom_col"], LB["asym_col"]]]
             asym_values = []
             for phase in phase_order:
                 right_rom = right_df[f"{phase}_ROM"].iloc[0]
@@ -2014,8 +2136,8 @@ with tab8:
                 ])
             valid_asym = [a for a in asym_values if not pd.isna(a)]
             elements.append(Paragraph(
-                f"{joint_name}  (Max: {max(valid_asym):.1f}% / Avg: {np.mean(valid_asym):.1f}%)"
-                if valid_asym else f"{joint_name}  (N/A)",
+                LB["max_avg_label"].format(joint=joint_name, mx=max(valid_asym), avg=np.mean(valid_asym))
+                if valid_asym else LB["max_avg_na_label"].format(joint=joint_name),
                 normal_style
             ))
             joint_table = Table(rows, hAlign="LEFT")
@@ -2034,7 +2156,7 @@ with tab8:
             elements.append(fig_to_rl_image(sym_fig, width_cm=11))
             elements.append(Spacer(1, 10))
         # ---- Healthy ROM Comparison (表 + グラフ) ----
-        elements.append(Paragraph("Healthy ROM Comparison", heading_style))
+        elements.append(Paragraph(LB["healthy_rom_heading"], heading_style))
         hrom_rows = [list(comparison_df.columns)]
         for _, row in comparison_df.iterrows():
             hrom_rows.append([str(v) for v in row.tolist()])
@@ -2060,36 +2182,36 @@ with tab8:
         elements.append(fig_to_rl_image(hrom_fig, width_cm=16))
         elements.append(Spacer(1, 12))
         # ---- Clinical Findings ----
-        elements.append(Paragraph("Clinical Findings", heading_style))
+        elements.append(Paragraph(LB["clinical_findings_heading"], heading_style))
         pdf_findings = []
         shoulder_asym_value = asymmetry_results.get("Shoulder", 0)
         if shoulder_asym_value > 15:
-            pdf_findings.append(f"Shoulder ROM asymmetry exceeds 15% ({shoulder_asym_value:.1f}%).")
+            pdf_findings.append(LB["asym_finding"].format(joint="Shoulder", v=shoulder_asym_value))
         for _, row in comparison_df.iterrows():
             if row["Out_of_Range"]:
-                pdf_findings.append(f"{row['Variable']} ROM outside healthy range.")
+                pdf_findings.append(LB["range_finding"].format(var=row["Variable"]))
         if len(pdf_findings) == 0:
-            elements.append(Paragraph("No major abnormalities detected.", normal_style))
+            elements.append(Paragraph(LB["no_findings"], normal_style))
         else:
             for item in pdf_findings:
                 elements.append(Paragraph(f"・{item}", normal_style))
         elements.append(Spacer(1, 12))
         # ---- Clinical Impression（検者記入欄） ----
-        elements.append(Paragraph("Clinical Impression（総合評価）", heading_style))
+        elements.append(Paragraph(LB["clinical_impression_heading"], heading_style))
         comment_text = (
             escape(clinical_comment).replace("\n", "<br/>")
             if clinical_comment.strip()
-            else "(記入なし)"
+            else LB["no_comment"]
         )
         elements.append(Paragraph(comment_text, normal_style))
         elements.append(Spacer(1, 12))
-        # ---- Movement Score（ハイライト表示） ----
-        elements.append(Paragraph("Movement Score", heading_style))
+        # ---- Movement Score（ハイライト表示・コンパクト） ----
+        elements.append(Paragraph(LB["movement_score_heading"], heading_style))
         elements.append(Paragraph(
-            f"OVERALL SCORE: {overall_score} / 100",
+            LB["overall_score_label"].format(s=overall_score),
             score_style
         ))
-        feature_rows = [["Feature", "Value"]]
+        feature_rows = [[LB["feature_col"], LB["value_col"]]]
         for _, row in feature_df.iterrows():
             feature_rows.append([str(row["Feature"]), str(row["Value"])])
         feature_table = Table(feature_rows, hAlign="LEFT")
@@ -2097,11 +2219,11 @@ with tab8:
         elements.append(feature_table)
         doc.build(elements)
         st.download_button(
-            "📥 Download PDF Report",
+            UI["download_label"],
             data=report_buffer.getvalue(),
             file_name="Arm_Flexion_Clinical_Report.pdf",
-            mime="application/pdf"
+            mime="application/pdf",
+            key="pdf_download_button_arm"
         )
-        st.success("PDFレポートを生成しました。上のボタンからダウンロードしてください。")
- 
+        st.success(UI["success_message"])
  
