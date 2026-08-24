@@ -2107,14 +2107,6 @@ with tab7:
         f"{overall_score}/100"
     )
 
-
-各フェーズ（Heel Strike/Mid Stance/Toe Off/Swing）でのStd（標準偏差）が大きい関節・フェーズ → ストライド間のばらつき（動作の一貫性低下）を示唆
-各関節（Hip/Knee/Ankle）でROMが最大となるフェーズ → 主要な可動局面を記述
-Mid Stance（立脚中期）とSwing（遊脚期）のROM差が15%を超える場合 → 立脚時の制御と遊脚時の下肢前方移動の間で動作パターンに差があることを示唆
-
-Phase Statistics表はHip(R/L)、Knee(R/L)、Ankle(R/L)、Pelvic Tilt、Pelvic Rotation、Pelvic Obliquity、Lumbar Extensionを対象にしています（Pelvic Obliquityは既存のKey Metrics/自動コメントで既に扱われているため含めています）。tab8全コードです。
-
-python
 # =========================
 # PDF Report
 # =========================
