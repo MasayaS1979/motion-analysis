@@ -226,7 +226,7 @@ tab_analysis, tab_guide = st.tabs([t("app.tab_analysis"), t("app.tab_guide")])
 # Sidebar: PDF Download
 # =========================
 try:
-    with open("MotionAnalysis_UserGuide.pdf", "rb") as pdf_file:
+    with open(GUIDE_PDF_PATH, "rb") as pdf_file:
         st.sidebar.download_button(
             label=t("app.sidebar_download_guide"),
             data=pdf_file.read(),
@@ -236,7 +236,7 @@ try:
         )
 except FileNotFoundError:
     st.sidebar.warning(t("app.sidebar_guide_missing"))
- 
+
 st.sidebar.divider()
  
 # =========================
@@ -302,7 +302,11 @@ with tab_analysis:
 # User Guide Tab
 # =========================
 with tab_guide:
- try:
+
+    st.header(t("app.guide_header"))
+    st.caption(t("app.guide_caption"))
+
+    try:
         with open(GUIDE_PDF_PATH, "rb") as pdf_file:
             st.download_button(
                 label=t("app.sidebar_download_guide"),
@@ -316,9 +320,5 @@ with tab_guide:
 
         st.markdown(t("app.guide_content"))
 
-    except FileNotFoundError:
-        st.error(t("app.guide_error"))
-        st.markdown(t("app.guide_content"))
- 
     except FileNotFoundError:
         st.error(t("app.guide_error"))
