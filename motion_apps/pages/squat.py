@@ -2047,7 +2047,8 @@ with tab8:
     UL = UI_LABELS[lang_code]
     def generate_squat_auto_comment(
         lang_code, overall_score, asymmetry_results, comparison_df,
-        lumbar_compensation, pelvic_compensation, pelvic_rotation_rom
+        lumbar_compensation, pelvic_compensation, pelvic_rotation_rom,
+        phase_summary_df, phase_order
     ):
         out_of_range_rows = comparison_df[comparison_df["Out_of_Range"]]
         asym_flags = [
@@ -2055,6 +2056,75 @@ with tab8:
             for joint, value in asymmetry_results.items()
             if value > 15
         ]
+
+        # ---- Phase Statistics由来の所見 ----
+        phase_stats_variables = {
+            "Hip Flexion (R)": "hip_flexion_r",
+            "Hip Flexion (L)": "hip_flexion_l",
+            "Knee Angle (R)": "knee_angle_r",
+            "Knee Angle (L)": "knee_angle_l",
+            "Ankle Angle (R)": "ankle_angle_r",
+            "Ankle Angle (L)": "ankle_angle_l",
+            "Pelvic Tilt": "pelvis_tilt",
+            "Pelvic Rotation": "pelvis_rotation",
+            "Lumbar Extension": "lumbar_extension",
+        }
+        joint_pairs = {
+            "Hip": ("hip_flexion_r", "hip_flexion_l"),
+            "Knee": ("knee_angle_r", "knee_angle_l"),
+            "Ankle": ("ankle_angle_r", "ankle_angle_l"),
+        }
+
+        # 1) Standing / Bottom フェーズでの姿勢安定性（Stdが大きい = 動揺あり）
+        # ※ しきい値2.0°は仮の基準です。臨床基準に合わせて調整してください。
+        STATIC_PHASES = ["Standing", "Bottom"]
+        STD_THRESHOLD = 2.0
+        instability_flags = []
+        for stat_label, variable in phase_stats_variables.items():
+            var_row = phase_summary_df[phase_summary_df["Variable"] == variable]
+            if len(var_row) == 0:
+                continue
+            for phase in STATIC_PHASES:
+                std_v = var_row[f"{phase}_Std"].iloc[0]
+                if pd.notna(std_v) and std_v > STD_THRESHOLD:
+                    instability_flags.append((stat_label, phase, std_v))
+
+        # 2) 各関節でROMが最大となるフェーズ（主要な可動局面）
+        dominant_phase_per_joint = {}
+        for joint_name, (right_var, left_var) in joint_pairs.items():
+            right_row = phase_summary_df[phase_summary_df["Variable"] == right_var]
+            left_row = phase_summary_df[phase_summary_df["Variable"] == left_var]
+            if len(right_row) == 0 or len(left_row) == 0:
+                continue
+            avg_rom_by_phase = {}
+            for phase in phase_order:
+                r_val = right_row[f"{phase}_ROM"].iloc[0]
+                l_val = left_row[f"{phase}_ROM"].iloc[0]
+                avg_rom_by_phase[phase] = np.nanmean([r_val, l_val])
+            dominant_phase_per_joint[joint_name] = max(avg_rom_by_phase, key=avg_rom_by_phase.get)
+
+        # 3) Descending（下降）と Ascending（上昇）のROM差（遠心性・求心性の動作制御差）
+        # ※ しきい値15%は左右対称性と同じ基準を仮採用しています。
+        ecc_con_flags = []
+        for joint_name, (right_var, left_var) in joint_pairs.items():
+            right_row = phase_summary_df[phase_summary_df["Variable"] == right_var]
+            left_row = phase_summary_df[phase_summary_df["Variable"] == left_var]
+            if len(right_row) == 0 or len(left_row) == 0:
+                continue
+            desc_avg = np.nanmean([
+                right_row["Descending_ROM"].iloc[0],
+                left_row["Descending_ROM"].iloc[0]
+            ])
+            asc_avg = np.nanmean([
+                right_row["Ascending_ROM"].iloc[0],
+                left_row["Ascending_ROM"].iloc[0]
+            ])
+            if max(desc_avg, asc_avg) == 0:
+                continue
+            diff_pct = abs(desc_avg - asc_avg) / max(desc_avg, asc_avg) * 100
+            if diff_pct > 15:
+                ecc_con_flags.append((joint_name, desc_avg, asc_avg, diff_pct))
+
         if lang_code == "ja":
             if overall_score >= 80:
                 score_line = f"総合スコアは{overall_score}/100と良好で、動作全体のパフォーマンスに大きな問題は見られません。"
@@ -2090,6 +2160,28 @@ with tab8:
                     "体幹・骨盤の代償動作として、" + "、".join(compensation_notes) +
                     "が観察されており、動作制御の代償パターンとして注意が必要です。"
                 )
+            if instability_flags:
+                instab_text = "、".join(f"{phase}フェーズの{label}" for label, phase, std_v in instability_flags)
+                lines.append(
+                    f"静止保持局面の安定性については、{instab_text}で標準偏差が大きく、"
+                    "保持中の姿勢動揺（不安定性）が疑われます。"
+                )
+            else:
+                lines.append("静止保持局面（Standing / Bottom）の姿勢安定性については、標準偏差の観点から顕著な動揺は見られませんでした。")
+            if dominant_phase_per_joint:
+                dominant_text = "、".join(f"{joint}は{phase}フェーズ" for joint, phase in dominant_phase_per_joint.items())
+                lines.append(f"各関節の主要な可動局面は、{dominant_text}で最大のROMを示しています。")
+            if ecc_con_flags:
+                ecc_text = "、".join(
+                    f"{joint}（下降 {desc:.1f}° ／ 上昇 {asc:.1f}°、差 {diff:.1f}%）"
+                    for joint, desc, asc, diff in ecc_con_flags
+                )
+                lines.append(
+                    f"下降局面（Descending）と上昇局面（Ascending）の可動域を比較すると、{ecc_text}で15%を超える差が見られ、"
+                    "遠心性収縮と求心性収縮の間で動作制御パターンに違いがある可能性があります。"
+                )
+            else:
+                lines.append("下降局面と上昇局面のROMを比較すると、いずれの関節も15%以内の差に収まっており、局面間で大きな制御の差は見られませんでした。")
             lines.append("以上は実測値からの自動生成による下書きです。臨床所見・触診所見と合わせて内容をご確認のうえ、必要に応じて修正してください。")
             return "\n".join(lines)
         else:
@@ -2128,6 +2220,28 @@ with tab8:
                     "Trunk/pelvic compensation was observed, including " + ", ".join(compensation_notes) +
                     ", which should be noted as a compensatory movement pattern."
                 )
+            if instability_flags:
+                instab_text = ", ".join(f"{label} during {phase}" for label, phase, std_v in instability_flags)
+                lines.append(
+                    f"Regarding stability during static hold phases, elevated standard deviation was observed for {instab_text}, "
+                    "suggesting possible postural instability during the hold."
+                )
+            else:
+                lines.append("Regarding stability during the static hold phases (Standing / Bottom), no notable instability was observed based on standard deviation.")
+            if dominant_phase_per_joint:
+                dominant_text = ", ".join(f"{joint} peaks during {phase}" for joint, phase in dominant_phase_per_joint.items())
+                lines.append(f"The dominant phase of motion for each joint was as follows: {dominant_text}.")
+            if ecc_con_flags:
+                ecc_text = ", ".join(
+                    f"{joint} (Descending {desc:.1f}° / Ascending {asc:.1f}°, diff {diff:.1f}%)"
+                    for joint, desc, asc, diff in ecc_con_flags
+                )
+                lines.append(
+                    f"Comparing the Descending and Ascending phases, a difference exceeding 15% was observed for {ecc_text}, "
+                    "suggesting a possible difference in motor control between eccentric and concentric contraction."
+                )
+            else:
+                lines.append("Comparing the Descending and Ascending phases, all joints remained within a 15% difference, with no major difference in control between phases.")
             lines.append("This draft was auto-generated from the measured values. Please review it alongside clinical examination and palpation findings, and edit as needed.")
             return "\n".join(lines)
     st.subheader(UL["header"])
@@ -2145,7 +2259,8 @@ with tab8:
     if st.button(UL["auto_generate_button"]):
         st.session_state["squat_clinical_comment"] = generate_squat_auto_comment(
             lang_code, overall_score, asymmetry_results, comparison_df,
-            lumbar_compensation, pelvic_compensation, pelvic_rotation_rom
+            lumbar_compensation, pelvic_compensation, pelvic_rotation_rom,
+            phase_summary_df, phase_order
         )
     st.caption(UL["auto_generate_caption"])
     clinical_comment = st.text_area(
