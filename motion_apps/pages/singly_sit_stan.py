@@ -2689,22 +2689,22 @@ with tab8:
         exam_date = st.text_input(UI["exam_date"], key="pdf_exam_date_single")
     with col3:
         examiner_name = st.text_input(UI["examiner"], key="pdf_examiner_name_single")
-   if st.button(UI["auto_generate_button"], key="pdf_auto_generate_button_single"):
-        st.session_state["pdf_clinical_comment_single"] = generate_single_sit_stand_auto_comment(
-            lang_code, ANALYSIS_SIDE, overall_score,
-            hip_score, knee_score, ankle_score,
-            lumbar_compensation, pelvis_tilt_compensation, pelvis_rotation_compensation,
-            comparison_display_df
-        )
+    if st.button(UI["auto_generate_button"], key="pdf_auto_generate_button_single"):
+         st.session_state["pdf_clinical_comment_single"] = generate_single_sit_stand_auto_comment(
+             lang_code, ANALYSIS_SIDE, overall_score,
+             hip_score, knee_score, ankle_score,
+             lumbar_compensation, pelvis_tilt_compensation, pelvis_rotation_compensation,
+             comparison_display_df
+         )
 
-    st.caption(UI["auto_generate_caption"])
+     st.caption(UI["auto_generate_caption"])
 
-    clinical_comment = st.text_area(
-        UI["comment_label"],
-        height=150,
-        key="pdf_clinical_comment_single"
-    )
-    if st.button(UI["generate_button"], key="pdf_generate_button_single"):
+     clinical_comment = st.text_area(
+         UI["comment_label"],
+         height=150,
+         key="pdf_clinical_comment_single"
+     )
+     if st.button(UI["generate_button"], key="pdf_generate_button_single"):
 
 
         LABELS = {
