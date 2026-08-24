@@ -2111,15 +2111,12 @@ with tab7:
 # PDF Report
 # =========================
 with tab8:
-
     lang_choice = st.radio(
         "レポート言語 / Report Language",
         ["日本語", "English"],
         horizontal=True
     )
-
     lang_code = "ja" if lang_choice == "日本語" else "en"
-
     UI_LABELS = {
         "ja": {
             "header": "PDFレポート",
@@ -2129,6 +2126,8 @@ with tab8:
             "examiner": "検者",
             "comment_heading": "総合評価 (Clinical Impression)",
             "comment_label": "検者による総合所見・コメントを記入してください（PDFに反映されます）",
+            "auto_generate_button": "🪄 コメントを自動生成（下書き）",
+            "auto_generate_caption": "計測データに基づいて下書きコメントを自動生成します。内容は必ず確認・編集の上でご使用ください。",
             "generate_button": "📄 PDFレポートを生成",
             "download_label": "📥 PDFレポートをダウンロード",
             "success_message": "PDFレポートを生成しました。上のボタンからダウンロードしてください。"
@@ -2141,19 +2140,102 @@ with tab8:
             "examiner": "Examiner",
             "comment_heading": "Clinical Impression",
             "comment_label": "Enter the examiner's overall clinical impression / comments (included in the PDF)",
+            "auto_generate_button": "🪄 Auto-generate Comment (Draft)",
+            "auto_generate_caption": "Automatically generates a draft comment based on the measured data. Please review and edit before use.",
             "generate_button": "📄 Generate PDF Report",
             "download_label": "📥 Download PDF Report",
             "success_message": "PDF report generated. Use the button above to download it."
         }
     }
-
     UL = UI_LABELS[lang_code]
+
+    def generate_gait_auto_comment(
+        lang_code, overall_score, gait_asymmetry_results, comparison_df,
+        cadence, lumbar_extension_rom, pelvis_tilt_rom, pelvis_rotation_rom,
+        pelvic_obliquity_rom
+    ):
+        lines = []
+        if lang_code == "ja":
+            if overall_score >= 80:
+                lines.append(f"総合スコアは{overall_score}点であり、良好な歩行パターンを示している。")
+            elif overall_score >= 60:
+                lines.append(f"総合スコアは{overall_score}点であり、軽度から中等度の歩行パターンの逸脱が見られる。")
+            else:
+                lines.append(f"総合スコアは{overall_score}点であり、歩行パターンに明らかな逸脱が見られる。")
+
+            if cadence < 90:
+                lines.append(f"ケイデンスは{cadence:.1f}歩/分であり、正常範囲を下回っている。")
+            elif cadence > 130:
+                lines.append(f"ケイデンスは{cadence:.1f}歩/分であり、正常範囲を上回っている。")
+
+            for joint_name, asym_value in gait_asymmetry_results.items():
+                if asym_value > 15:
+                    lines.append(f"{joint_name}関節のROM非対称性が{asym_value:.1f}%と、15%の基準値を超えている。")
+
+            abnormal_vars = comparison_df[comparison_df["Status"] == "Abnormal"]["Variable"].tolist()
+            if len(abnormal_vars) > 0:
+                lines.append("健常者ROMとの比較において、" + "、".join(str(v) for v in abnormal_vars) + "が基準範囲外であった。")
+
+            compensation_notes = []
+            if lumbar_extension_rom > 10:
+                compensation_notes.append(f"腰椎伸展（{lumbar_extension_rom:.1f}°）")
+            if pelvis_tilt_rom > 10:
+                compensation_notes.append(f"骨盤前後傾（{pelvis_tilt_rom:.1f}°）")
+            if pelvis_rotation_rom > 10:
+                compensation_notes.append(f"骨盤回旋（{pelvis_rotation_rom:.1f}°）")
+            if pelvic_obliquity_rom > 10:
+                compensation_notes.append(f"骨盤側方傾斜（{pelvic_obliquity_rom:.1f}°）")
+            if compensation_notes:
+                lines.append("、".join(compensation_notes) + "の可動域が大きく、代償動作の可能性がある。")
+
+            if len(lines) <= 1:
+                lines.append("その他、顕著な代償動作や左右差は認められなかった。")
+
+            lines.append("")
+            lines.append("※本コメントは計測データに基づく自動生成の下書きです。実際の触診・観察所見と照らし合わせた上で、検者が内容を確認・修正してください。")
+        else:
+            if overall_score >= 80:
+                lines.append(f"The overall score is {overall_score}, indicating a favorable gait pattern.")
+            elif overall_score >= 60:
+                lines.append(f"The overall score is {overall_score}, indicating mild to moderate deviation from a typical gait pattern.")
+            else:
+                lines.append(f"The overall score is {overall_score}, indicating a clear deviation from a typical gait pattern.")
+
+            if cadence < 90:
+                lines.append(f"Cadence is {cadence:.1f} steps/min, below the normal range.")
+            elif cadence > 130:
+                lines.append(f"Cadence is {cadence:.1f} steps/min, above the normal range.")
+
+            for joint_name, asym_value in gait_asymmetry_results.items():
+                if asym_value > 15:
+                    lines.append(f"{joint_name} ROM asymmetry is {asym_value:.1f}%, exceeding the 15% threshold.")
+
+            abnormal_vars = comparison_df[comparison_df["Status"] == "Abnormal"]["Variable"].tolist()
+            if len(abnormal_vars) > 0:
+                lines.append("Compared to healthy reference ROM, the following variables were outside the normal range: " + ", ".join(str(v) for v in abnormal_vars) + ".")
+
+            compensation_notes = []
+            if lumbar_extension_rom > 10:
+                compensation_notes.append(f"lumbar extension ({lumbar_extension_rom:.1f}°)")
+            if pelvis_tilt_rom > 10:
+                compensation_notes.append(f"pelvic tilt ({pelvis_tilt_rom:.1f}°)")
+            if pelvis_rotation_rom > 10:
+                compensation_notes.append(f"pelvic rotation ({pelvis_rotation_rom:.1f}°)")
+            if pelvic_obliquity_rom > 10:
+                compensation_notes.append(f"pelvic obliquity ({pelvic_obliquity_rom:.1f}°)")
+            if compensation_notes:
+                lines.append("Increased range noted in " + ", ".join(compensation_notes) + ", suggesting possible compensatory movement.")
+
+            if len(lines) <= 1:
+                lines.append("No other significant compensations or asymmetries were noted.")
+
+            lines.append("")
+            lines.append("Note: This comment is an automatically generated draft based on measured data. Please review and revise it against actual palpation and observational findings before finalizing.")
+        return "\n".join(lines)
 
     st.subheader(UL["header"])
     st.caption(UL["caption"])
-
     col1, col2, col3 = st.columns(3)
-
     with col1:
         subject_name = st.text_input(UL["subject_name"], value="")
     with col2:
@@ -2163,14 +2245,25 @@ with tab8:
 
     st.markdown(f"#### {UL['comment_heading']}")
 
+    if "gait_clinical_comment" not in st.session_state:
+        st.session_state["gait_clinical_comment"] = ""
+
+    if st.button(UL["auto_generate_button"]):
+        st.session_state["gait_clinical_comment"] = generate_gait_auto_comment(
+            lang_code, overall_score, gait_asymmetry_results, comparison_df,
+            cadence, lumbar_extension_rom, pelvis_tilt_rom, pelvis_rotation_rom,
+            pelvic_obliquity_rom
+        )
+
+    st.caption(UL["auto_generate_caption"])
+
     clinical_comment = st.text_area(
         UL["comment_label"],
-        value="",
+        key="gait_clinical_comment",
         height=150
     )
 
     if st.button(UL["generate_button"]):
-
         LABELS = {
             "ja": {
                 "title": "歩行分析 臨床レポート",
@@ -2249,11 +2342,8 @@ with tab8:
                 "value_col": "Value"
             }
         }
-
         LB = LABELS[lang_code]
-
         report_buffer = BytesIO()
-
         doc = SimpleDocTemplate(
             report_buffer,
             pagesize=A4,
@@ -2262,24 +2352,19 @@ with tab8:
             leftMargin=1.5 * cm,
             rightMargin=1.5 * cm
         )
-
         styles = getSampleStyleSheet()
-
         title_style = ParagraphStyle(
             "TitleJP", parent=styles["Title"],
             fontName="HeiseiKakuGo-W5", fontSize=18
         )
-
         heading_style = ParagraphStyle(
             "HeadingJP", parent=styles["Heading2"],
             fontName="HeiseiKakuGo-W5", spaceBefore=12, spaceAfter=6
         )
-
         normal_style = ParagraphStyle(
             "NormalJP", parent=styles["Normal"],
             fontName="HeiseiKakuGo-W5", fontSize=9
         )
-
         # ---- Overall Score用ハイライトスタイル（コンパクト版） ----
         if overall_score >= 80:
             score_color = colors.HexColor("#1B7A3D")   # 緑
@@ -2287,7 +2372,6 @@ with tab8:
             score_color = colors.HexColor("#B8860B")   # 黄土色
         else:
             score_color = colors.HexColor("#C0392B")   # 赤
-
         score_style = ParagraphStyle(
             "ScoreStyle",
             parent=styles["Normal"],
@@ -2302,7 +2386,6 @@ with tab8:
             borderPadding=6
         )
         # ※ しきい値(80/60)は仮の基準です。臨床基準に合わせて調整してください。
-
         TABLE_STYLE = TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -2310,87 +2393,70 @@ with tab8:
             ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
         ])
-
         colors_phase_pdf = {
             "Heel Strike": "blue",
             "Mid Stance": "orange",
             "Toe Off": "limegreen",
             "Swing": "red"
         }
-
         elements = []
-
         # ---- Title / Subject Info ----
         elements.append(Paragraph(LB["title"], title_style))
         elements.append(Spacer(1, 6))
-
         info_text = LB["subject_line"].format(
             name=subject_name or "-",
             date=exam_date or "-",
             examiner=examiner_name or "-"
         )
         elements.append(Paragraph(info_text, normal_style))
-
         if not np.isnan(step_time):
             cadence_text = LB["cadence_line_full"].format(
                 cadence=cadence, step_time=step_time
             )
         else:
             cadence_text = LB["cadence_line_na"].format(cadence=cadence)
-
         elements.append(Paragraph(cadence_text, normal_style))
         elements.append(Spacer(1, 12))
-
         # ---- Gait Phase Detection Plot ----
         elements.append(Paragraph(LB["phase_detection_heading"], heading_style))
-
         pdf_phase_fig, pdf_phase_ax = plt.subplots(figsize=(10, 4))
-
         pdf_phase_ax.plot(
             signal_smooth_r, color="white", linewidth=1, alpha=0.4, label="Right Ankle"
         )
         pdf_phase_ax.plot(
             signal_smooth_l, color="cyan", linewidth=1, alpha=0.4, linestyle="--", label="Left Ankle"
         )
-
         for phase in phase_order:
             idx_r = df_phase_r["Phase"] == phase
             pdf_phase_ax.scatter(
                 df_phase_r.index[idx_r], signal_smooth_r[idx_r],
                 c=colors_phase_pdf[phase], marker="o", s=8, label=f"R {phase}"
             )
-
         for phase in phase_order:
             idx_l = df_phase_l["Phase"] == phase
             pdf_phase_ax.scatter(
                 df_phase_l.index[idx_l], signal_smooth_l[idx_l],
                 c=colors_phase_pdf[phase], marker="^", s=8, label=f"L {phase}"
             )
-
         pdf_phase_ax.set_title("Gait Phase Detection Plot")
         pdf_phase_ax.set_xlabel("Frame")
         pdf_phase_ax.set_ylabel("Ankle Angle (deg)")
         pdf_phase_ax.legend(fontsize=6, ncol=2)
         pdf_phase_ax.grid(alpha=0.3)
-
         elements.append(fig_to_rl_image(pdf_phase_fig, width_cm=16))
         elements.append(Spacer(1, 12))
-
         # ---- Key Metrics ----
         elements.append(Paragraph(LB["key_metrics_heading"], heading_style))
-
         key_metrics_data = [
             [LB["metric_col"], LB["right_col"], LB["left_col"]],
             [LB["hip_rom_row"], f"{hip_rom_r:.1f}", f"{hip_rom_l:.1f}"],
             [LB["knee_rom_row"], f"{knee_rom_r:.1f}", f"{knee_rom_l:.1f}"],
             [LB["ankle_rom_row"], f"{ankle_rom_r:.1f}", f"{ankle_rom_l:.1f}"],
         ]
-
         key_metrics_table = Table(key_metrics_data, hAlign="LEFT")
         key_metrics_table.setStyle(TABLE_STYLE)
         elements.append(key_metrics_table)
         elements.append(Spacer(1, 6))
-
         elements.append(Paragraph(
             LB["pelvis_line"].format(
                 tilt=pelvis_tilt_rom,
@@ -2401,44 +2467,33 @@ with tab8:
             normal_style
         ))
         elements.append(Spacer(1, 12))
-
         # ---- Joint ROM Summary (Whole Trial) ----
         elements.append(Paragraph(LB["joint_rom_summary_heading"], heading_style))
-
         rom_joints_pdf = {
             "Hip": ("hip_flexion_r", "hip_flexion_l"),
             "Knee": ("knee_angle_r", "knee_angle_l"),
             "Ankle": ("ankle_angle_r", "ankle_angle_l"),
         }
-
         rom_summary_rows_pdf = [[LB["joint_col"], LB["right_rom_col"], LB["left_rom_col"]]]
         rom_r_values_pdf = []
         rom_l_values_pdf = []
         joint_names_pdf = []
-
         for joint_name, (right_var, left_var) in rom_joints_pdf.items():
-
             rom_r_whole = df_phase[right_var].max() - df_phase[right_var].min()
             rom_l_whole = df_phase[left_var].max() - df_phase[left_var].min()
-
             rom_r_values_pdf.append(rom_r_whole)
             rom_l_values_pdf.append(rom_l_whole)
             joint_names_pdf.append(joint_name)
-
             rom_summary_rows_pdf.append(
                 [joint_name, f"{rom_r_whole:.1f}", f"{rom_l_whole:.1f}"]
             )
-
         rom_summary_table = Table(rom_summary_rows_pdf, hAlign="LEFT")
         rom_summary_table.setStyle(TABLE_STYLE)
         elements.append(rom_summary_table)
         elements.append(Spacer(1, 8))
-
         rom_summary_fig, rom_summary_ax = plt.subplots(figsize=(8, 4))
-
         x_pos = np.arange(len(joint_names_pdf))
         bar_width = 0.35
-
         rom_summary_ax.bar(
             x_pos - bar_width / 2, rom_r_values_pdf, bar_width,
             label="Right", color="royalblue"
@@ -2447,45 +2502,34 @@ with tab8:
             x_pos + bar_width / 2, rom_l_values_pdf, bar_width,
             label="Left", color="orange"
         )
-
         rom_summary_ax.set_xticks(x_pos)
         rom_summary_ax.set_xticklabels(joint_names_pdf)
         rom_summary_ax.set_ylabel("ROM (deg)")
         rom_summary_ax.set_title("Joint ROM Summary (Whole Trial)")
         rom_summary_ax.legend(fontsize=8)
         rom_summary_ax.grid(alpha=0.3, axis="y")
-
         elements.append(fig_to_rl_image(rom_summary_fig, width_cm=12))
         elements.append(Spacer(1, 12))
-
         # ---- Symmetry Analysis (表 + グラフ) ----
         elements.append(Paragraph(LB["symmetry_heading"], heading_style))
-
         symmetry_joints_pdf = {
             "Hip": ("hip_flexion_r", "hip_flexion_l"),
             "Knee": ("knee_angle_r", "knee_angle_l"),
             "Ankle": ("ankle_angle_r", "ankle_angle_l"),
         }
-
         for joint_name, (right_var, left_var) in symmetry_joints_pdf.items():
-
             right_df = phase_summary_df[phase_summary_df["Variable"] == right_var]
             left_df = phase_summary_df[phase_summary_df["Variable"] == left_var]
-
             rows = [[LB["phase_col"], LB["right_rom_col2"], LB["left_rom_col2"], LB["asym_col"]]]
             asym_values = []
-
             for phase in phase_order:
                 right_rom = right_df[f"{phase}_ROM"].iloc[0]
                 left_rom = left_df[f"{phase}_ROM"].iloc[0]
-
                 asymmetry = 0 if max(right_rom, left_rom) == 0 else (
                     abs(right_rom - left_rom) / max(right_rom, left_rom) * 100
                 )
-
                 asym_values.append(asymmetry)
                 rows.append([phase, f"{right_rom:.2f}", f"{left_rom:.2f}", f"{asymmetry:.2f}"])
-
             elements.append(Paragraph(
                 LB["max_avg_label"].format(
                     joint=joint_name,
@@ -2494,12 +2538,10 @@ with tab8:
                 ),
                 normal_style
             ))
-
             joint_table = Table(rows, hAlign="LEFT")
             joint_table.setStyle(TABLE_STYLE)
             elements.append(joint_table)
             elements.append(Spacer(1, 6))
-
             sym_fig, sym_ax = plt.subplots(figsize=(6, 3))
             sym_ax.bar(phase_order, asym_values, color="royalblue")
             sym_ax.axhline(15, color="red", linestyle="--", linewidth=1, label="15% Threshold")
@@ -2508,29 +2550,22 @@ with tab8:
             sym_ax.legend(fontsize=8)
             sym_ax.grid(alpha=0.3, axis="y")
             plt.setp(sym_ax.get_xticklabels(), rotation=20, ha="right", fontsize=7)
-
             elements.append(fig_to_rl_image(sym_fig, width_cm=11))
             elements.append(Spacer(1, 10))
-
         # ---- Healthy ROM Comparison (表 + グラフ) ----
         elements.append(Paragraph(LB["healthy_rom_heading"], heading_style))
-
         hrom_rows = [list(comparison_df.columns)]
         for _, row in comparison_df.iterrows():
             hrom_rows.append([str(v) for v in row.tolist()])
-
         hrom_table = Table(hrom_rows, hAlign="LEFT")
         hrom_table.setStyle(TABLE_STYLE)
         elements.append(hrom_table)
         elements.append(Spacer(1, 8))
-
         hrom_fig, hrom_ax = plt.subplots(figsize=(10, 4))
-
         bar_colors_pdf = [
             "red" if row["Status"] == "Abnormal" else "royalblue"
             for _, row in comparison_df.iterrows()
         ]
-
         hrom_ax.bar(
             comparison_df["Variable"], comparison_df["ROM_Difference_%"], color=bar_colors_pdf
         )
@@ -2539,42 +2574,32 @@ with tab8:
         hrom_ax.set_title("Gait Healthy ROM Comparison")
         plt.setp(hrom_ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
         hrom_ax.grid(alpha=0.3, axis="y")
-
         elements.append(fig_to_rl_image(hrom_fig, width_cm=16))
         elements.append(Spacer(1, 12))
-
         # ---- Clinical Findings ----
         elements.append(Paragraph(LB["clinical_findings_heading"], heading_style))
-
         pdf_findings = []
-
         if cadence < 90:
             pdf_findings.append(LB["cadence_low_finding"])
         if cadence > 130:
             pdf_findings.append(LB["cadence_high_finding"])
-
         for joint_name in symmetry_joints_pdf.keys():
             asym_value = gait_asymmetry_results.get(joint_name, 0)
             if asym_value > 15:
                 pdf_findings.append(
                     LB["asym_finding"].format(joint=joint_name, value=asym_value)
                 )
-
         for _, row in comparison_df.iterrows():
             if row["Status"] == "Abnormal":
                 pdf_findings.append(LB["range_finding"].format(variable=row["Variable"]))
-
         if len(pdf_findings) == 0:
             elements.append(Paragraph(LB["no_findings"], normal_style))
         else:
             for item in pdf_findings:
                 elements.append(Paragraph(f"・{item}", normal_style))
-
         elements.append(Spacer(1, 12))
-
         # ---- Clinical Impression（検者記入欄） ----
         elements.append(Paragraph(LB["clinical_impression_heading"], heading_style))
-
         comment_text = (
             escape(clinical_comment).replace("\n", "<br/>")
             if clinical_comment.strip()
@@ -2582,30 +2607,23 @@ with tab8:
         )
         elements.append(Paragraph(comment_text, normal_style))
         elements.append(Spacer(1, 12))
-
         # ---- Movement Score（ハイライト表示・コンパクト版） ----
         elements.append(Paragraph(LB["movement_score_heading"], heading_style))
-
         elements.append(Paragraph(
             LB["overall_score_label"].format(score=overall_score),
             score_style
         ))
-
         feature_rows = [[LB["feature_col"], LB["value_col"]]]
         for _, row in gait_feature_df.iterrows():
             feature_rows.append([str(row["Feature"]), str(row["Value"])])
-
         feature_table = Table(feature_rows, hAlign="LEFT")
         feature_table.setStyle(TABLE_STYLE)
         elements.append(feature_table)
-
         doc.build(elements)
-
         st.download_button(
             UL["download_label"],
             data=report_buffer.getvalue(),
             file_name="Gait_Clinical_Report.pdf",
             mime="application/pdf"
         )
-
         st.success(UL["success_message"])
