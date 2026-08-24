@@ -2008,15 +2008,12 @@ with tab7:
 # PDF Report
 # =========================
 with tab8:
-
     lang_choice = st.radio(
         "レポート言語 / Report Language",
         ["日本語", "English"],
         horizontal=True
     )
-
     lang_code = "ja" if lang_choice == "日本語" else "en"
-
     UI_LABELS = {
          "ja": {
             "header": "PDFレポート",
@@ -2047,34 +2044,25 @@ with tab8:
             "success_message": "PDF report generated. Use the button above to download it."
         }
     }
-
-
     UL = UI_LABELS[lang_code]
-
     def generate_squat_auto_comment(
         lang_code, overall_score, asymmetry_results, comparison_df,
         lumbar_compensation, pelvic_compensation, pelvic_rotation_rom
     ):
-
         out_of_range_rows = comparison_df[comparison_df["Out_of_Range"]]
-
         asym_flags = [
             (joint, value)
             for joint, value in asymmetry_results.items()
             if value > 15
         ]
-
         if lang_code == "ja":
-
             if overall_score >= 80:
                 score_line = f"総合スコアは{overall_score}/100と良好で、動作全体のパフォーマンスに大きな問題は見られません。"
             elif overall_score >= 60:
                 score_line = f"総合スコアは{overall_score}/100であり、動作の一部に改善の余地が見られます。"
             else:
                 score_line = f"総合スコアは{overall_score}/100であり、動作パターン全体に注意が必要な所見が複数見られます。"
-
             lines = [score_line]
-
             if asym_flags:
                 asym_text = "、".join(f"{joint}関節で{value:.1f}%" for joint, value in asym_flags)
                 lines.append(
@@ -2083,7 +2071,6 @@ with tab8:
                 )
             else:
                 lines.append("左右対称性については、いずれの関節も15%のしきい値以内に収まっており、明らかな偏りは見られませんでした。")
-
             if len(out_of_range_rows) > 0:
                 range_text = "、".join(out_of_range_rows["Variable"].tolist())
                 lines.append(
@@ -2091,7 +2078,6 @@ with tab8:
                 )
             else:
                 lines.append("健常可動域との比較では、すべての項目が基準範囲内に収まっていました。")
-
             compensation_notes = []
             if lumbar_compensation > 10:
                 compensation_notes.append(f"腰椎伸展の代償動作（{lumbar_compensation:.1f}°）")
@@ -2099,28 +2085,21 @@ with tab8:
                 compensation_notes.append(f"骨盤前後傾の代償動作（{pelvic_compensation:.1f}°）")
             if pelvic_rotation_rom > 10:
                 compensation_notes.append(f"骨盤回旋の代償動作（{pelvic_rotation_rom:.1f}°）")
-
             if compensation_notes:
                 lines.append(
                     "体幹・骨盤の代償動作として、" + "、".join(compensation_notes) +
                     "が観察されており、動作制御の代償パターンとして注意が必要です。"
                 )
-
             lines.append("以上は実測値からの自動生成による下書きです。臨床所見・触診所見と合わせて内容をご確認のうえ、必要に応じて修正してください。")
-
             return "\n".join(lines)
-
         else:
-
             if overall_score >= 80:
                 score_line = f"The overall score is {overall_score}/100, indicating generally good movement performance with no major concerns."
             elif overall_score >= 60:
                 score_line = f"The overall score is {overall_score}/100, indicating some areas of the movement pattern that could be improved."
             else:
                 score_line = f"The overall score is {overall_score}/100, indicating several findings across the movement pattern that warrant attention."
-
             lines = [score_line]
-
             if asym_flags:
                 asym_text = ", ".join(f"{joint} ({value:.1f}%)" for joint, value in asym_flags)
                 lines.append(
@@ -2129,7 +2108,6 @@ with tab8:
                 )
             else:
                 lines.append("Regarding left-right symmetry, all joints remained within the 15% threshold, with no clear asymmetry observed.")
-
             if len(out_of_range_rows) > 0:
                 range_text = ", ".join(out_of_range_rows["Variable"].tolist())
                 lines.append(
@@ -2138,7 +2116,6 @@ with tab8:
                 )
             else:
                 lines.append("Compared to the healthy ROM reference, all measured variables fell within the reference range.")
-
             compensation_notes = []
             if lumbar_compensation > 10:
                 compensation_notes.append(f"lumbar extension compensation ({lumbar_compensation:.1f}°)")
@@ -2146,20 +2123,15 @@ with tab8:
                 compensation_notes.append(f"pelvic tilt compensation ({pelvic_compensation:.1f}°)")
             if pelvic_rotation_rom > 10:
                 compensation_notes.append(f"pelvic rotation compensation ({pelvic_rotation_rom:.1f}°)")
-
             if compensation_notes:
                 lines.append(
                     "Trunk/pelvic compensation was observed, including " + ", ".join(compensation_notes) +
                     ", which should be noted as a compensatory movement pattern."
                 )
-
             lines.append("This draft was auto-generated from the measured values. Please review it alongside clinical examination and palpation findings, and edit as needed.")
-
             return "\n".join(lines)
-
     st.subheader(UL["header"])
     st.caption(UL["caption"])
-
     col1, col2, col3 = st.columns(3)
     with col1:
         subject_name = st.text_input(UL["subject_name"], value="")
@@ -2167,28 +2139,21 @@ with tab8:
         exam_date = st.text_input(UL["exam_date"], value="")
     with col3:
         examiner_name = st.text_input(UL["examiner"], value="")
-
     st.markdown(f"#### {UL['comment_heading']}")
-
     if "squat_clinical_comment" not in st.session_state:
         st.session_state["squat_clinical_comment"] = ""
-
     if st.button(UL["auto_generate_button"]):
         st.session_state["squat_clinical_comment"] = generate_squat_auto_comment(
             lang_code, overall_score, asymmetry_results, comparison_df,
             lumbar_compensation, pelvic_compensation, pelvic_rotation_rom
         )
-
     st.caption(UL["auto_generate_caption"])
-
     clinical_comment = st.text_area(
         UL["comment_label"],
         key="squat_clinical_comment",
         height=150
     )
-
     if st.button("📄 Generate PDF Report"):
-
         LABELS = {
             "ja": {
                 "title": "Squat Analysis 臨床レポート",
@@ -2206,6 +2171,14 @@ with tab8:
                 "compensation_line": "腰椎代償: {l:.1f}°　骨盤代償: {p:.1f}°　骨盤回旋: {r:.1f}°",
                 "joint_rom_heading": "関節可動域サマリー（試技全体）",
                 "joint_col": "関節", "rom_col": "可動域 (°)",
+                "phase_stats_heading": "フェーズ別統計（Min/Max/Mean/Std/ROM）",
+                "phase_label": "フェーズ",
+                "ps_variable_col": "項目",
+                "ps_min_col": "最小",
+                "ps_max_col": "最大",
+                "ps_mean_col": "平均",
+                "ps_std_col": "標準偏差",
+                "ps_rom_col": "ROM (°)",
                 "symmetry_heading": "左右対称性分析",
                 "phase_col": "フェーズ", "right_rom_col": "右ROM", "left_rom_col": "左ROM", "asym_col": "非対称性(%)",
                 "max_avg_label": "{joint}　(最大: {mx:.1f}% / 平均: {avg:.1f}%)",
@@ -2239,6 +2212,14 @@ with tab8:
                 "compensation_line": "Lumbar Compensation: {l:.1f}°  Pelvic Compensation: {p:.1f}°  Pelvic Rotation: {r:.1f}°",
                 "joint_rom_heading": "Joint ROM Summary (Whole Trial)",
                 "joint_col": "Joint", "rom_col": "ROM (deg)",
+                "phase_stats_heading": "Phase Statistics (Min/Max/Mean/Std/ROM)",
+                "phase_label": "Phase",
+                "ps_variable_col": "Variable",
+                "ps_min_col": "Min",
+                "ps_max_col": "Max",
+                "ps_mean_col": "Mean",
+                "ps_std_col": "Std",
+                "ps_rom_col": "ROM (deg)",
                 "symmetry_heading": "Symmetry Analysis",
                 "phase_col": "Phase", "right_rom_col": "Right_ROM", "left_rom_col": "Left_ROM", "asym_col": "Asymmetry_%",
                 "max_avg_label": "{joint}  (Max: {mx:.1f}% / Avg: {avg:.1f}%)",
@@ -2258,7 +2239,6 @@ with tab8:
             },
         }
         LB = LABELS[lang_code]
-
         report_buffer = BytesIO()
         doc = SimpleDocTemplate(
             report_buffer,
@@ -2402,6 +2382,50 @@ with tab8:
         rom_summary_ax.grid(alpha=0.3, axis="y")
         elements.append(fig_to_rl_image(rom_summary_fig, width_cm=11))
         elements.append(Spacer(1, 12))
+        # ---- Phase Statistics (Min/Max/Mean/Std/ROM per Phase) ----
+        elements.append(Paragraph(LB["phase_stats_heading"], heading_style))
+        phase_stats_variables = {
+            "Hip Flexion (R)": "hip_flexion_r",
+            "Hip Flexion (L)": "hip_flexion_l",
+            "Knee Angle (R)": "knee_angle_r",
+            "Knee Angle (L)": "knee_angle_l",
+            "Ankle Angle (R)": "ankle_angle_r",
+            "Ankle Angle (L)": "ankle_angle_l",
+            "Pelvic Tilt": "pelvis_tilt",
+            "Pelvic Rotation": "pelvis_rotation",
+            "Lumbar Extension": "lumbar_extension",
+        }
+        for phase in phase_order:
+            elements.append(Paragraph(
+                f"{LB['phase_label']}: {phase}",
+                normal_style
+            ))
+            phase_stats_rows = [[
+                LB["ps_variable_col"], LB["ps_min_col"], LB["ps_max_col"],
+                LB["ps_mean_col"], LB["ps_std_col"], LB["ps_rom_col"]
+            ]]
+            for stat_label, variable in phase_stats_variables.items():
+                var_row = phase_summary_df[phase_summary_df["Variable"] == variable]
+                if len(var_row) == 0:
+                    continue
+                min_v = var_row[f"{phase}_Min"].iloc[0]
+                max_v = var_row[f"{phase}_Max"].iloc[0]
+                mean_v = var_row[f"{phase}_Mean"].iloc[0]
+                std_v = var_row[f"{phase}_Std"].iloc[0]
+                rom_v = var_row[f"{phase}_ROM"].iloc[0]
+                phase_stats_rows.append([
+                    stat_label,
+                    f"{min_v:.1f}" if pd.notna(min_v) else "-",
+                    f"{max_v:.1f}" if pd.notna(max_v) else "-",
+                    f"{mean_v:.1f}" if pd.notna(mean_v) else "-",
+                    f"{std_v:.1f}" if pd.notna(std_v) else "-",
+                    f"{rom_v:.1f}" if pd.notna(rom_v) else "-",
+                ])
+            phase_stats_table = Table(phase_stats_rows, hAlign="LEFT")
+            phase_stats_table.setStyle(TABLE_STYLE)
+            elements.append(phase_stats_table)
+            elements.append(Spacer(1, 8))
+        elements.append(Spacer(1, 4))
         # ---- Symmetry Analysis (表 + グラフ) ----
         elements.append(Paragraph(LB["symmetry_heading"], heading_style))
         symmetry_joints_pdf = {
