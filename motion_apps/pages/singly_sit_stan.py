@@ -2517,29 +2517,136 @@ with tab7:
     )
 
 with tab8:
-    st.header("📄 PDF Report")
 
+    lang_choice = st.radio(
+        "レポート言語 / Report Language",
+        ["日本語", "English"],
+        horizontal=True,
+        key="pdf_lang_single"
+    )
+    lang_code = "ja" if lang_choice == "日本語" else "en"
+
+    UI_LABELS = {
+        "ja": {
+            "header": "📄 PDFレポート",
+            "subject_name": "対象者名",
+            "exam_date": "測定日",
+            "examiner": "検者",
+            "comment_label": "総合評価 (Clinical Impression)",
+            "generate_button": "PDFレポートを生成",
+            "download_label": "📥 PDFレポートをダウンロード",
+            "success_message": "PDFレポートを生成しました。上のボタンからダウンロードしてください。",
+        },
+        "en": {
+            "header": "📄 PDF Report",
+            "subject_name": "Subject Name",
+            "exam_date": "Exam Date",
+            "examiner": "Examiner",
+            "comment_label": "Clinical Impression",
+            "generate_button": "Generate PDF Report",
+            "download_label": "📥 Download PDF Report",
+            "success_message": "PDF report generated. Use the button above to download.",
+        },
+    }
+    UI = UI_LABELS[lang_code]
+
+    st.header(UI["header"])
     col1, col2, col3 = st.columns(3)
     with col1:
-        subject_name = st.text_input("Subject Name", key="pdf_subject_name_single")
+        subject_name = st.text_input(UI["subject_name"], key="pdf_subject_name_single")
     with col2:
-        exam_date = st.text_input("Exam Date", key="pdf_exam_date_single")
+        exam_date = st.text_input(UI["exam_date"], key="pdf_exam_date_single")
     with col3:
-        examiner_name = st.text_input("Examiner", key="pdf_examiner_name_single")
-
+        examiner_name = st.text_input(UI["examiner"], key="pdf_examiner_name_single")
     clinical_comment = st.text_area(
-        "総合評価 (Clinical Impression)",
+        UI["comment_label"],
         height=150,
         key="pdf_clinical_comment_single"
     )
 
-    if st.button("Generate PDF Report", key="pdf_generate_button_single"):
+    if st.button(UI["generate_button"], key="pdf_generate_button_single"):
+
+        LABELS = {
+            "ja": {
+                "title": "Single Sit-to-Stand Analysis 臨床レポート",
+                "subject_line": "対象者名: {name}　測定日: {date}　検者: {examiner}",
+                "analysis_side_label": "分析側",
+                "phase_detection_heading": "Single Sit-to-Stand 位相検出",
+                "key_metrics_heading": "主要指標",
+                "metric_col": "指標", "value_col": "値",
+                "max_hip_r_row": "最大股関節屈曲（右）(°)",
+                "max_hip_l_row": "最大股関節屈曲（左）(°)",
+                "max_knee_r_row": "最大膝関節屈曲（右）(°)",
+                "max_knee_l_row": "最大膝関節屈曲（左）(°)",
+                "max_ankle_r_row": "最大足関節可動（右）(°)",
+                "max_ankle_l_row": "最大足関節可動（左）(°)",
+                "lumbar_comp_row": "腰椎代償",
+                "pelvis_tilt_comp_row": "骨盤前後傾代償",
+                "pelvis_rot_comp_row": "骨盤回旋",
+                "joint_rom_summary_heading": "関節可動域サマリー（試技全体）",
+                "joint_col": "関節", "rom_col": "可動域 (°)",
+                "joint_rom_analysis_heading": "関節可動域分析（分析側: {side}）",
+                "healthy_ref_col": "健常参考値 (°)", "jra_score_col": "スコア",
+                "healthy_rom_heading": "健常可動域比較",
+                "variable_col": "変数", "subject_value_col": "測定値",
+                "healthy_min_col": "健常最小", "healthy_max_col": "健常最大", "oor_col": "範囲外",
+                "no_rom_columns": "（ROM比較の列を自動検出できませんでした。利用可能な列: {cols}）",
+                "clinical_findings_heading": "臨床所見",
+                "no_findings": "重大な異常所見は検出されませんでした。",
+                "range_finding": "{var} が健常参考範囲外です。",
+                "low_score_finding": "{label}の可動域スコア（{score:.0f}）は健常参考値と比べて可動性の低下を示しています。",
+                "clinical_impression_heading": "総合評価 (Clinical Impression)",
+                "no_comment": "(記入なし)",
+                "overall_score_label": "総合スコア: {s} / 100",
+                "movement_score_heading": "動作スコア内訳",
+                "component_col": "項目", "msb_score_col": "スコア",
+                "additional_features_heading": "追加特徴量",
+                "feature_col": "特徴量", "value_col2": "値",
+            },
+            "en": {
+                "title": "Single Sit-to-Stand Analysis Clinical Report",
+                "subject_line": "Subject Name: {name}  Exam Date: {date}  Examiner: {examiner}",
+                "analysis_side_label": "Analysis Side",
+                "phase_detection_heading": "Single Sit-to-Stand Phase Detection",
+                "key_metrics_heading": "Key Metrics",
+                "metric_col": "Metric", "value_col": "Value",
+                "max_hip_r_row": "Max Hip Flexion (R) (°)",
+                "max_hip_l_row": "Max Hip Flexion (L) (°)",
+                "max_knee_r_row": "Max Knee Flexion (R) (°)",
+                "max_knee_l_row": "Max Knee Flexion (L) (°)",
+                "max_ankle_r_row": "Max Ankle Motion (R) (°)",
+                "max_ankle_l_row": "Max Ankle Motion (L) (°)",
+                "lumbar_comp_row": "Lumbar Compensation",
+                "pelvis_tilt_comp_row": "Pelvis Tilt Compensation",
+                "pelvis_rot_comp_row": "Pelvic Rotation",
+                "joint_rom_summary_heading": "Joint ROM Summary (Whole Trial)",
+                "joint_col": "Joint", "rom_col": "ROM (°)",
+                "joint_rom_analysis_heading": "Joint ROM Analysis (Analysis Side: {side})",
+                "healthy_ref_col": "Healthy Reference (°)", "jra_score_col": "Score",
+                "healthy_rom_heading": "Healthy ROM Comparison",
+                "variable_col": "Variable", "subject_value_col": "Subject Value",
+                "healthy_min_col": "Healthy Min", "healthy_max_col": "Healthy Max", "oor_col": "Out of Range",
+                "no_rom_columns": "(Could not detect ROM comparison columns automatically. Available columns: {cols})",
+                "clinical_findings_heading": "Clinical Findings",
+                "no_findings": "No significant abnormal findings detected.",
+                "range_finding": "{var} is outside the healthy reference range.",
+                "low_score_finding": "{label} ROM score ({score:.0f}) indicates reduced mobility relative to healthy reference.",
+                "clinical_impression_heading": "Clinical Impression",
+                "no_comment": "(No comment entered)",
+                "overall_score_label": "OVERALL SCORE: {s} / 100",
+                "movement_score_heading": "Movement Score Breakdown",
+                "component_col": "Component", "msb_score_col": "Score",
+                "additional_features_heading": "Additional Features",
+                "feature_col": "Feature", "value_col2": "Value",
+            },
+        }
+        LB = LABELS[lang_code]
+
         buf_pdf = BytesIO()
         doc = SimpleDocTemplate(buf_pdf, pagesize=A4,
                                  topMargin=1.5*cm, bottomMargin=1.5*cm,
                                  leftMargin=1.5*cm, rightMargin=1.5*cm)
         styles = getSampleStyleSheet()
-
         title_style = ParagraphStyle(
             "TitleJP", parent=styles["Title"],
             fontName="HeiseiKakuGo-W5", fontSize=18, alignment=TA_CENTER
@@ -2559,86 +2666,119 @@ with tab8:
             backColor=colors.HexColor("#1565C0") if ANALYSIS_SIDE == "Right" else colors.HexColor("#C2185B"),
             borderPadding=6
         )
+        # ---- Overall Score用ハイライトスタイル（コンパクト版） ----
+        if overall_score >= 80:
+            score_color = colors.HexColor("#2E7D32")
+        elif overall_score >= 60:
+            score_color = colors.HexColor("#F9A825")
+        else:
+            score_color = colors.HexColor("#C62828")
+        score_style = ParagraphStyle(
+            "ScoreStyle", parent=styles["Normal"],
+            fontName="HeiseiKakuGo-W5", fontSize=16, leading=20, alignment=TA_CENTER,
+            textColor=colors.white, backColor=score_color,
+            borderPadding=6, spaceBefore=6, spaceAfter=8
+        )
+        TABLE_STYLE = TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#37474F")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F5F5")]),
+        ])
 
         elements = []
-
-        elements.append(Paragraph("Single Sit-to-Stand Analysis Clinical Report", title_style))
+        elements.append(Paragraph(LB["title"], title_style))
         elements.append(Spacer(1, 0.5*cm))
-
-        subject_info = f"""
-        Subject Name: {escape(subject_name)}<br/>
-        Exam Date: {escape(exam_date)}<br/>
-        Examiner: {escape(examiner_name)}
-        """
-        elements.append(Paragraph(subject_info, normal_style))
+        subject_line = LB["subject_line"].format(
+            name=escape(subject_name), date=escape(exam_date), examiner=escape(examiner_name)
+        )
+        elements.append(Paragraph(subject_line, normal_style))
         elements.append(Spacer(1, 0.3*cm))
-
-        elements.append(Paragraph(f"Analysis Side: {ANALYSIS_SIDE}", badge_style))
+        elements.append(Paragraph(f"{LB['analysis_side_label']}: {ANALYSIS_SIDE}", badge_style))
         elements.append(Spacer(1, 0.5*cm))
 
         # ---- Phase Detection Plot ----
-        elements.append(Paragraph("Single Sit-to-Stand Phase Detection", heading_style))
-
+        # 注意: matplotlibにCJKフォントが無いため、グラフ内のタイトル/軸ラベル/凡例は
+        # 言語選択に関わらず固定の英語表記にしています。
+        elements.append(Paragraph(LB["phase_detection_heading"], heading_style))
         fig_phase_pdf, ax_phase_pdf = plt.subplots(figsize=(10, 4))
         colors_phase_pdf = {"Sitting": "red", "Rising": "limegreen", "Standing": "dodgerblue", "Lowering": "orange"}
-        ax_phase_pdf.plot(df.index, signal, color="black", linewidth=1)
-        for i, phase in enumerate(phases):
-            ax_phase_pdf.axvspan(i - 0.5, i + 0.5, color=colors_phase_pdf.get(phase, "gray"), alpha=0.3)
-        ax_phase_pdf.axvline(sitting_idx, color="red", linestyle="--", linewidth=1, label="Sitting")
-        ax_phase_pdf.axvline(standing_idx, color="dodgerblue", linestyle="--", linewidth=1, label="Standing")
+        ax_phase_pdf.plot(df.index, signal, color="black", linewidth=1, alpha=0.4)
+        for phase in phase_order:
+            idx = df_phase["Phase"] == phase
+            ax_phase_pdf.scatter(
+                df_phase.index[idx],
+                signal[idx],
+                c=colors_phase_pdf.get(phase, "gray"),
+                s=8,
+                label=phase
+            )
+        ax_phase_pdf.axvline(sitting_idx, color="red", linestyle="--", linewidth=1)
+        ax_phase_pdf.axvline(standing_idx, color="dodgerblue", linestyle="--", linewidth=1)
+        ax_phase_pdf.set_title("Phase Detection Plot")
         ax_phase_pdf.set_xlabel("Frame")
-        ax_phase_pdf.set_ylabel("Pelvis Ty")
+        ax_phase_pdf.set_ylabel("Pelvis Vertical Position (m)")
         ax_phase_pdf.legend(loc="upper right", fontsize=8)
+        ax_phase_pdf.grid(alpha=0.3)
         elements.append(fig_to_rl_image(fig_phase_pdf, width_cm=16))
         elements.append(Spacer(1, 0.5*cm))
 
         # ---- Key Metrics ----
-        elements.append(Paragraph("Key Metrics", heading_style))
+        elements.append(Paragraph(LB["key_metrics_heading"], heading_style))
         key_metrics_data = [
-            ["Metric", "Value"],
-            ["Max Hip Flexion (R) (°)", f"{max_hip_r:.1f}"],
-            ["Max Hip Flexion (L) (°)", f"{max_hip_l:.1f}"],
-            ["Max Knee Flexion (R) (°)", f"{max_knee_r:.1f}"],
-            ["Max Knee Flexion (L) (°)", f"{max_knee_l:.1f}"],
-            ["Max Ankle Motion (R) (°)", f"{max_ankle_r:.1f}"],
-            ["Max Ankle Motion (L) (°)", f"{max_ankle_l:.1f}"],
-            ["Lumbar Compensation", f"{lumbar_compensation:.2f}"],
-            ["Pelvis Tilt Compensation", f"{pelvis_tilt_compensation:.2f}"],
-            ["Pelvic Rotation", f"{pelvis_rotation_compensation:.2f}"],
+            [LB["metric_col"], LB["value_col"]],
+            [LB["max_hip_r_row"], f"{max_hip_r:.1f}"],
+            [LB["max_hip_l_row"], f"{max_hip_l:.1f}"],
+            [LB["max_knee_r_row"], f"{max_knee_r:.1f}"],
+            [LB["max_knee_l_row"], f"{max_knee_l:.1f}"],
+            [LB["max_ankle_r_row"], f"{max_ankle_r:.1f}"],
+            [LB["max_ankle_l_row"], f"{max_ankle_l:.1f}"],
+            [LB["lumbar_comp_row"], f"{lumbar_compensation:.2f}"],
+            [LB["pelvis_tilt_comp_row"], f"{pelvis_tilt_compensation:.2f}"],
+            [LB["pelvis_rot_comp_row"], f"{pelvis_rotation_compensation:.2f}"],
         ]
         key_metrics_table = Table(key_metrics_data, colWidths=[9*cm, 6*cm])
-        key_metrics_table.setStyle(TableStyle([
-            ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#37474F")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F5F5")]),
-        ]))
+        key_metrics_table.setStyle(TABLE_STYLE)
         elements.append(key_metrics_table)
         elements.append(Spacer(1, 0.5*cm))
 
-        # ---- Joint ROM Analysis (replaces Symmetry Analysis — single-leg has no L/R symmetry concept) ----
-        elements.append(Paragraph(f"Joint ROM Analysis (Analysis Side: {ANALYSIS_SIDE})", heading_style))
+        # ---- Joint ROM Summary (試技全体でのROM。tab6のJoint ROM Summaryと同じ計算) ----
+        elements.append(Paragraph(LB["joint_rom_summary_heading"], heading_style))
+        rom_joints_pdf = {"Hip": HIP, "Knee": KNEE, "Ankle": ANKLE}
+        rom_summary_rows = [[LB["joint_col"], LB["rom_col"]]]
+        rom_summary_values = []
+        for joint_name, variable in rom_joints_pdf.items():
+            rom_val = df_phase[variable].max() - df_phase[variable].min()
+            rom_summary_values.append(rom_val)
+            rom_summary_rows.append([joint_name, f"{rom_val:.1f}"])
+        rom_summary_table = Table(rom_summary_rows, hAlign="LEFT")
+        rom_summary_table.setStyle(TABLE_STYLE)
+        elements.append(rom_summary_table)
+        elements.append(Spacer(1, 0.3*cm))
+        fig_rom_summary_pdf, ax_rom_summary_pdf = plt.subplots(figsize=(6, 3))
+        ax_rom_summary_pdf.bar(list(rom_joints_pdf.keys()), rom_summary_values, color="royalblue")
+        for i, v in enumerate(rom_summary_values):
+            ax_rom_summary_pdf.text(i, v, f"{v:.1f}°", ha="center", va="bottom", fontsize=8)
+        ax_rom_summary_pdf.set_ylabel("ROM (deg)")
+        ax_rom_summary_pdf.set_title("Joint ROM Summary (Whole Trial)")
+        ax_rom_summary_pdf.grid(alpha=0.3, axis="y")
+        elements.append(fig_to_rl_image(fig_rom_summary_pdf, width_cm=11))
+        elements.append(Spacer(1, 0.5*cm))
 
-        rom_summary_data = [
-            ["Joint", "ROM (°)", "Healthy Reference (°)", "Score"],
+        # ---- Joint ROM Analysis (healthy reference + score つき、既存のロジック) ----
+        elements.append(Paragraph(LB["joint_rom_analysis_heading"].format(side=ANALYSIS_SIDE), heading_style))
+        rom_analysis_data = [
+            [LB["joint_col"], LB["rom_col"], LB["healthy_ref_col"], LB["jra_score_col"]],
             ["Hip", f"{hip_rom:.1f}", f"{healthy_hip_rom}", f"{hip_score:.0f}"],
             ["Knee", f"{knee_rom:.1f}", f"{healthy_knee_rom}", f"{knee_score:.0f}"],
             ["Ankle", f"{ankle_rom:.1f}", f"{healthy_ankle_rom}", f"{ankle_score:.0f}"],
         ]
-        rom_summary_table = Table(rom_summary_data, colWidths=[4*cm, 4*cm, 5*cm, 3*cm])
-        rom_summary_table.setStyle(TableStyle([
-            ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#37474F")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F5F5")]),
-        ]))
-        elements.append(rom_summary_table)
+        rom_analysis_table = Table(rom_analysis_data, colWidths=[4*cm, 4*cm, 5*cm, 3*cm])
+        rom_analysis_table.setStyle(TABLE_STYLE)
+        elements.append(rom_analysis_table)
         elements.append(Spacer(1, 0.3*cm))
-
         fig_rom_pdf, ax_rom_pdf = plt.subplots(figsize=(8, 4))
         joint_labels = ["Hip", "Knee", "Ankle"]
         subject_values = [hip_rom, knee_rom, ankle_rom]
@@ -2653,8 +2793,8 @@ with tab8:
         elements.append(fig_to_rl_image(fig_rom_pdf, width_cm=14))
         elements.append(Spacer(1, 0.5*cm))
 
-         # ---- Healthy ROM Comparison (uses comparison_display_df, the side-filtered table) ----
-        elements.append(Paragraph("Healthy ROM Comparison", heading_style))
+        # ---- Healthy ROM Comparison (comparison_display_df, 列名は自動検出) ----
+        elements.append(Paragraph(LB["healthy_rom_heading"], heading_style))
 
         def _resolve_rom_columns(dframe):
             cols = list(dframe.columns)
@@ -2664,7 +2804,6 @@ with tab8:
                     if all(k in cl for k in keywords):
                         return c
                 return None
-
             oor_col = find("out", "range") or find("range")
             min_col = find("min")
             max_col = find("max")
@@ -2689,12 +2828,14 @@ with tab8:
 
         if VALUE_COL is None:
             elements.append(Paragraph(
-                f"(Could not detect ROM comparison columns automatically. "
-                f"Available columns: {list(comparison_display_df.columns)})",
+                LB["no_rom_columns"].format(cols=list(comparison_display_df.columns)),
                 normal_style
             ))
         else:
-            rom_table_data = [["Variable", "Subject Value", "Healthy Min", "Healthy Max", "Out of Range"]]
+            rom_table_data = [[
+                LB["variable_col"], LB["subject_value_col"],
+                LB["healthy_min_col"], LB["healthy_max_col"], LB["oor_col"]
+            ]]
             for idx, row in comparison_display_df.iterrows():
                 rom_table_data.append([
                     str(row.get("Variable", idx)),
@@ -2704,14 +2845,7 @@ with tab8:
                     "⚠️" if (OOR_COL and bool(row.get(OOR_COL, False))) else "",
                 ])
             rom_table = Table(rom_table_data, colWidths=[5*cm, 3*cm, 3*cm, 3*cm, 2.5*cm])
-            rom_table.setStyle(TableStyle([
-                ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#37474F")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F5F5")]),
-            ]))
+            rom_table.setStyle(TABLE_STYLE)
             elements.append(rom_table)
             elements.append(Spacer(1, 0.3*cm))
 
@@ -2719,7 +2853,6 @@ with tab8:
                 bar_colors = ["crimson" if bool(v) else "seagreen" for v in comparison_display_df[OOR_COL]]
             else:
                 bar_colors = "seagreen"
-
             fig_healthy_pdf, ax_healthy_pdf = plt.subplots(figsize=(10, 4))
             ax_healthy_pdf.bar(comparison_display_df.index.astype(str), comparison_display_df[VALUE_COL], color=bar_colors)
             ax_healthy_pdf.set_ylabel("Value")
@@ -2727,82 +2860,54 @@ with tab8:
             elements.append(fig_to_rl_image(fig_healthy_pdf, width_cm=16))
         elements.append(Spacer(1, 0.5*cm))
 
-       # ---- Clinical Findings ----
-        elements.append(Paragraph("Clinical Findings", heading_style))
+        # ---- Clinical Findings ----
+        elements.append(Paragraph(LB["clinical_findings_heading"], heading_style))
         findings = []
         if OOR_COL:
             for idx, row in comparison_display_df.iterrows():
                 if bool(row.get(OOR_COL, False)):
-                    findings.append(f"- {row.get('Variable', idx)} is outside the healthy reference range.")
+                    findings.append(LB["range_finding"].format(var=row.get("Variable", idx)))
         for label, score in [("Hip", hip_score), ("Knee", knee_score), ("Ankle", ankle_score)]:
             if score < 60:
-                findings.append(f"- {label} ROM score ({score:.0f}) indicates reduced mobility relative to healthy reference.")
-        findings_text = "<br/>".join(findings) if findings else "No significant abnormal findings detected."
+                findings.append(LB["low_score_finding"].format(label=label, score=score))
+        findings_text = "<br/>".join(findings) if findings else LB["no_findings"]
         elements.append(Paragraph(findings_text, normal_style))
         elements.append(Spacer(1, 0.5*cm))
 
         # ---- Clinical Impression ----
-        elements.append(Paragraph("総合評価 (Clinical Impression)", heading_style))
-        comment_text = escape(clinical_comment).replace("\n", "<br/>") if clinical_comment else "(No comment entered)"
+        elements.append(Paragraph(LB["clinical_impression_heading"], heading_style))
+        comment_text = escape(clinical_comment).replace("\n", "<br/>") if clinical_comment else LB["no_comment"]
         elements.append(Paragraph(comment_text, normal_style))
         elements.append(Spacer(1, 0.5*cm))
 
-        # ---- Overall Score (highlighted) ----
-        if overall_score >= 80:
-            score_color = colors.HexColor("#2E7D32")
-        elif overall_score >= 60:
-            score_color = colors.HexColor("#F9A825")
-        else:
-            score_color = colors.HexColor("#C62828")
-
-        score_style = ParagraphStyle(
-            "ScoreStyle", parent=styles["Normal"],
-            fontName="HeiseiKakuGo-W5", fontSize=22, alignment=TA_CENTER,
-            textColor=colors.white, backColor=score_color,
-            borderPadding=10, spaceBefore=10, spaceAfter=10
-        )
-        elements.append(Paragraph(f"OVERALL SCORE: {overall_score} / 100", score_style))
-        elements.append(Spacer(1, 0.5*cm))
+        # ---- Overall Score (highlighted, コンパクト) ----
+        elements.append(Paragraph(LB["overall_score_label"].format(s=overall_score), score_style))
+        elements.append(Spacer(1, 0.3*cm))
 
         # ---- Movement Score Breakdown ----
-        elements.append(Paragraph("Movement Score Breakdown", heading_style))
-        score_table_data = [["Component", "Score"]] + [[str(c) for c in row] for row in score_df.values.tolist()]
+        elements.append(Paragraph(LB["movement_score_heading"], heading_style))
+        score_table_data = [[LB["component_col"], LB["msb_score_col"]]] + [[str(c) for c in row] for row in score_df.values.tolist()]
         score_table = Table(score_table_data, colWidths=[9*cm, 6*cm])
-        score_table.setStyle(TableStyle([
-            ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#37474F")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F5F5")]),
-        ]))
+        score_table.setStyle(TABLE_STYLE)
         elements.append(score_table)
         elements.append(Spacer(1, 0.5*cm))
 
         # ---- Additional Features ----
-        elements.append(Paragraph("Additional Features", heading_style))
-        feature_table_data = [["Feature", "Value"]]
+        elements.append(Paragraph(LB["additional_features_heading"], heading_style))
+        feature_table_data = [[LB["feature_col"], LB["value_col2"]]]
         for _, row in feature_df.iterrows():
             feature_table_data.append([str(row["Feature"]), str(row["Value"])])
         feature_table = Table(feature_table_data, colWidths=[9*cm, 6*cm])
-        feature_table.setStyle(TableStyle([
-            ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#37474F")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F5F5")]),
-        ]))
+        feature_table.setStyle(TABLE_STYLE)
         elements.append(feature_table)
 
         doc.build(elements)
         buf_pdf.seek(0)
-
         st.download_button(
-            label="Download PDF Report",
+            label=UI["download_label"],
             data=buf_pdf,
             file_name="Single_SitStand_Clinical_Report.pdf",
             mime="application/pdf",
             key="pdf_download_button_single"
         )
- 
+        st.success(UI["success_message"])
