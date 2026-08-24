@@ -2018,7 +2018,7 @@ with tab8:
     lang_code = "ja" if lang_choice == "日本語" else "en"
 
     UI_LABELS = {
-        "ja": {
+         "ja": {
             "header": "PDFレポート",
             "caption": "Squat Analysisの主要な結果をまとめた統合PDFレポートを生成します。",
             "subject_name": "対象者名",
@@ -2046,6 +2046,8 @@ with tab8:
             "download_label": "📥 Download PDF Report",
             "success_message": "PDF report generated. Use the button above to download it."
         }
+    }
+
 
     UL = UI_LABELS[lang_code]
 
