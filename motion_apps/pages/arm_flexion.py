@@ -1870,6 +1870,7 @@ with tab8:
         horizontal=True,
         key="pdf_lang_arm"
     )
+
     lang_code = "ja" if lang_choice == "日本語" else "en"
 
     UI_LABELS = {
@@ -1881,6 +1882,8 @@ with tab8:
             "examiner": "検者",
             "comment_heading": "#### 総合評価 (Clinical Impression)",
             "comment_label": "検者による総合所見・コメントを記入してください（PDFに反映されます）",
+            "auto_generate_button": "🪄 コメントを自動生成（下書き）",
+            "auto_generate_caption": "実測値をもとに下書きコメントを自動生成します。内容を確認・編集してからPDFを生成してください。",
             "generate_button": "📄 PDFレポートを生成",
             "download_label": "📥 PDFレポートをダウンロード",
             "success_message": "PDFレポートを生成しました。上のボタンからダウンロードしてください。",
@@ -1893,15 +1896,125 @@ with tab8:
             "examiner": "Examiner",
             "comment_heading": "#### Clinical Impression",
             "comment_label": "Enter the examiner's overall clinical impression (included in the PDF)",
+            "auto_generate_button": "🪄 Auto-generate Comment (Draft)",
+            "auto_generate_caption": "Generates a draft comment from the measured values. Please review and edit before generating the PDF.",
             "generate_button": "📄 Generate PDF Report",
             "download_label": "📥 Download PDF Report",
             "success_message": "PDF report generated. Use the button above to download.",
         },
     }
+
     UI = UI_LABELS[lang_code]
+
+    def generate_arm_flexion_auto_comment(
+        lang_code, overall_score, asymmetry_results, comparison_df,
+        lumbar_compensation, pelvis_compensation, pelvis_rotation_compensation
+    ):
+
+        out_of_range_rows = comparison_df[comparison_df["Out_of_Range"]]
+
+        asym_flags = [
+            (joint, value)
+            for joint, value in asymmetry_results.items()
+            if value > 15
+        ]
+
+        if lang_code == "ja":
+
+            if overall_score >= 80:
+                score_line = f"総合スコアは{overall_score}/100と良好で、動作全体のパフォーマンスに大きな問題は見られません。"
+            elif overall_score >= 60:
+                score_line = f"総合スコアは{overall_score}/100であり、動作の一部に改善の余地が見られます。"
+            else:
+                score_line = f"総合スコアは{overall_score}/100であり、動作パターン全体に注意が必要な所見が複数見られます。"
+
+            lines = [score_line]
+
+            if asym_flags:
+                asym_text = "、".join(f"{joint}で{value:.1f}%" for joint, value in asym_flags)
+                lines.append(
+                    f"左右対称性については、{asym_text}の非対称性が15%のしきい値を超えており、"
+                    "片側への負荷偏重や代償動作の可能性が考えられます。"
+                )
+            else:
+                lines.append("左右対称性については、肩関節の非対称性は15%のしきい値以内に収まっており、明らかな偏りは見られませんでした。")
+
+            if len(out_of_range_rows) > 0:
+                range_text = "、".join(out_of_range_rows["Variable"].tolist())
+                lines.append(
+                    f"健常可動域との比較では、{range_text}が基準範囲外となっており、可動域の制限または過可動が疑われます。"
+                )
+            else:
+                lines.append("健常可動域との比較では、すべての項目が基準範囲内に収まっていました。")
+
+            compensation_notes = []
+            if lumbar_compensation > 10:
+                compensation_notes.append(f"腰椎伸展の代償動作（{lumbar_compensation:.1f}°）")
+            if pelvis_compensation > 10:
+                compensation_notes.append(f"骨盤前後傾の代償動作（{pelvis_compensation:.1f}°）")
+            if pelvis_rotation_compensation > 10:
+                compensation_notes.append(f"骨盤回旋の代償動作（{pelvis_rotation_compensation:.1f}°）")
+
+            if compensation_notes:
+                lines.append(
+                    "体幹・骨盤の代償動作として、" + "、".join(compensation_notes) +
+                    "が観察されており、動作制御の代償パターンとして注意が必要です。"
+                )
+
+            lines.append("以上は実測値からの自動生成による下書きです。臨床所見・触診所見と合わせて内容をご確認のうえ、必要に応じて修正してください。")
+
+            return "\n".join(lines)
+
+        else:
+
+            if overall_score >= 80:
+                score_line = f"The overall score is {overall_score}/100, indicating generally good movement performance with no major concerns."
+            elif overall_score >= 60:
+                score_line = f"The overall score is {overall_score}/100, indicating some areas of the movement pattern that could be improved."
+            else:
+                score_line = f"The overall score is {overall_score}/100, indicating several findings across the movement pattern that warrant attention."
+
+            lines = [score_line]
+
+            if asym_flags:
+                asym_text = ", ".join(f"{joint} ({value:.1f}%)" for joint, value in asym_flags)
+                lines.append(
+                    f"Regarding left-right symmetry, asymmetry exceeding the 15% threshold was observed at the {asym_text}, "
+                    "suggesting possible unilateral loading or compensatory movement."
+                )
+            else:
+                lines.append("Regarding left-right symmetry, shoulder asymmetry remained within the 15% threshold, with no clear asymmetry observed.")
+
+            if len(out_of_range_rows) > 0:
+                range_text = ", ".join(out_of_range_rows["Variable"].tolist())
+                lines.append(
+                    f"Compared to the healthy ROM reference, {range_text} fell outside the reference range, "
+                    "suggesting possible restricted or excessive range of motion."
+                )
+            else:
+                lines.append("Compared to the healthy ROM reference, all measured variables fell within the reference range.")
+
+            compensation_notes = []
+            if lumbar_compensation > 10:
+                compensation_notes.append(f"lumbar extension compensation ({lumbar_compensation:.1f}°)")
+            if pelvis_compensation > 10:
+                compensation_notes.append(f"pelvic tilt compensation ({pelvis_compensation:.1f}°)")
+            if pelvis_rotation_compensation > 10:
+                compensation_notes.append(f"pelvic rotation compensation ({pelvis_rotation_compensation:.1f}°)")
+
+            if compensation_notes:
+                lines.append(
+                    "Trunk/pelvic compensation was observed, including " + ", ".join(compensation_notes) +
+                    ", which should be noted as a compensatory movement pattern."
+                )
+
+            lines.append("This draft was auto-generated from the measured values. Please review it alongside clinical examination and palpation findings, and edit as needed.")
+
+            return "\n".join(lines)
 
     st.subheader(UI["header"])
     st.caption(UI["caption"])
+
     col1, col2, col3 = st.columns(3)
     with col1:
         subject_name = st.text_input(UI["subject_name"], value="", key="pdf_subject_name_arm")
@@ -1909,10 +2022,19 @@ with tab8:
         exam_date = st.text_input(UI["exam_date"], value="", key="pdf_exam_date_arm")
     with col3:
         examiner_name = st.text_input(UI["examiner"], value="", key="pdf_examiner_name_arm")
+
     st.markdown(UI["comment_heading"])
+
+    if st.button(UI["auto_generate_button"], key="pdf_auto_generate_button_arm"):
+        st.session_state["pdf_clinical_comment_arm"] = generate_arm_flexion_auto_comment(
+            lang_code, overall_score, asymmetry_results, comparison_df,
+            lumbar_compensation, pelvis_compensation, pelvis_rotation_compensation
+        )
+
+    st.caption(UI["auto_generate_caption"])
+
     clinical_comment = st.text_area(
         UI["comment_label"],
-        value="",
         height=150,
         key="pdf_clinical_comment_arm"
     )
@@ -1971,6 +2093,7 @@ with tab8:
                 "feature_col": "Feature", "value_col": "Value",
             },
         }
+
         LB = LABELS[lang_code]
 
         report_buffer = BytesIO()
@@ -1982,7 +2105,9 @@ with tab8:
             leftMargin=1.5 * cm,
             rightMargin=1.5 * cm
         )
+
         styles = getSampleStyleSheet()
+
         title_style = ParagraphStyle(
             "TitleJP", parent=styles["Title"],
             fontName="HeiseiKakuGo-W5", fontSize=18
@@ -1995,6 +2120,7 @@ with tab8:
             "NormalJP", parent=styles["Normal"],
             fontName="HeiseiKakuGo-W5", fontSize=9
         )
+
         # ---- Overall Score用ハイライトスタイル（コンパクト版） ----
         if overall_score >= 80:
             score_color = colors.HexColor("#1B7A3D")   # 緑
@@ -2002,6 +2128,7 @@ with tab8:
             score_color = colors.HexColor("#B8860B")   # 黄土色
         else:
             score_color = colors.HexColor("#C0392B")   # 赤
+
         score_style = ParagraphStyle(
             "ScoreStyle",
             parent=styles["Normal"],
@@ -2016,6 +2143,7 @@ with tab8:
             borderPadding=6
         )
         # ※ しきい値(80/60)は仮の基準です。臨床基準に合わせて調整してください。
+
         TABLE_STYLE = TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -2023,25 +2151,31 @@ with tab8:
             ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
         ])
+
         colors_phase_pdf = {
             "Start": "blue",
             "Raising": "limegreen",
             "Top": "orange",
             "Lowering": "red"
         }
+
         elements = []
+
         # ---- Title / Subject Info ----
         elements.append(Paragraph(LB["title"], title_style))
         elements.append(Spacer(1, 6))
+
         info_text = LB["subject_line"].format(
             name=subject_name or "-", date=exam_date or "-", examiner=examiner_name or "-"
         )
         elements.append(Paragraph(info_text, normal_style))
         elements.append(Spacer(1, 12))
+
         # ---- Phase Detection Plot ----
         # 注意: matplotlibにCJKフォントが無いため、グラフ内のタイトル/軸ラベル/凡例は
         # 言語選択に関わらず固定の英語表記にしています。
         elements.append(Paragraph(LB["phase_detection_heading"], heading_style))
+
         pdf_phase_fig, pdf_phase_ax = plt.subplots(figsize=(10, 4))
         pdf_phase_ax.plot(
             df_phase.index, arm_flexion,
@@ -2061,10 +2195,13 @@ with tab8:
         pdf_phase_ax.set_ylabel("Shoulder Flexion Angle (deg)")
         pdf_phase_ax.legend(fontsize=8)
         pdf_phase_ax.grid(alpha=0.3)
+
         elements.append(fig_to_rl_image(pdf_phase_fig, width_cm=16))
         elements.append(Spacer(1, 12))
+
         # ---- Key Metrics ----
         elements.append(Paragraph(LB["key_metrics_heading"], heading_style))
+
         key_metrics_data = [
             [LB["metric_col"], LB["right_col"], LB["left_col"]],
             [LB["max_shoulder_row"], f"{max_arm_flexion_r:.1f}", f"{max_arm_flexion_l:.1f}"],
@@ -2073,6 +2210,7 @@ with tab8:
         key_metrics_table.setStyle(TABLE_STYLE)
         elements.append(key_metrics_table)
         elements.append(Spacer(1, 6))
+
         elements.append(Paragraph(
             LB["compensation_line"].format(
                 l=lumbar_compensation, p=pelvis_compensation, r=pelvis_rotation_compensation
@@ -2080,8 +2218,10 @@ with tab8:
             normal_style
         ))
         elements.append(Spacer(1, 12))
+
         # ---- Joint ROM Summary (試技全体でのROM。tab6のJoint ROM Summaryと同じ計算) ----
         elements.append(Paragraph(LB["joint_rom_summary_heading"], heading_style))
+
         rom_joints_pdf = {
             "Right Shoulder": "arm_flex_r",
             "Left Shoulder": "arm_flex_l",
@@ -2094,10 +2234,12 @@ with tab8:
             rom_val = df_phase[variable].max() - df_phase[variable].min()
             rom_summary_values.append(rom_val)
             rom_summary_rows.append([joint_name, f"{rom_val:.1f}"])
+
         rom_summary_table = Table(rom_summary_rows, hAlign="LEFT")
         rom_summary_table.setStyle(TABLE_STYLE)
         elements.append(rom_summary_table)
         elements.append(Spacer(1, 6))
+
         rom_summary_fig, rom_summary_ax = plt.subplots(figsize=(7, 3))
         rom_summary_ax.bar(list(rom_joints_pdf.keys()), rom_summary_values, color="royalblue")
         for i, v in enumerate(rom_summary_values):
@@ -2108,11 +2250,14 @@ with tab8:
         plt.setp(rom_summary_ax.get_xticklabels(), rotation=15, fontsize=8)
         elements.append(fig_to_rl_image(rom_summary_fig, width_cm=12))
         elements.append(Spacer(1, 12))
+
         # ---- Symmetry Analysis (表 + グラフ) ----
         elements.append(Paragraph(LB["symmetry_heading"], heading_style))
+
         symmetry_joints_pdf = {
             "Shoulder": ("arm_flex_r", "arm_flex_l"),
         }
+
         for joint_name, (right_var, left_var) in symmetry_joints_pdf.items():
             right_df = phase_summary_df[phase_summary_df["Variable"] == right_var]
             left_df = phase_summary_df[phase_summary_df["Variable"] == left_var]
@@ -2144,6 +2289,7 @@ with tab8:
             joint_table.setStyle(TABLE_STYLE)
             elements.append(joint_table)
             elements.append(Spacer(1, 6))
+
             sym_fig, sym_ax = plt.subplots(figsize=(6, 3))
             plot_phases = [p for p, a in zip(phase_order, asym_values) if not pd.isna(a)]
             plot_values = [a for a in asym_values if not pd.isna(a)]
@@ -2155,15 +2301,19 @@ with tab8:
             sym_ax.grid(alpha=0.3, axis="y")
             elements.append(fig_to_rl_image(sym_fig, width_cm=11))
             elements.append(Spacer(1, 10))
+
         # ---- Healthy ROM Comparison (表 + グラフ) ----
         elements.append(Paragraph(LB["healthy_rom_heading"], heading_style))
+
         hrom_rows = [list(comparison_df.columns)]
         for _, row in comparison_df.iterrows():
             hrom_rows.append([str(v) for v in row.tolist()])
+
         hrom_table = Table(hrom_rows, hAlign="LEFT")
         hrom_table.setStyle(TABLE_STYLE)
         elements.append(hrom_table)
         elements.append(Spacer(1, 8))
+
         hrom_fig, hrom_ax = plt.subplots(figsize=(10, 4))
         bar_colors_pdf = [
             "red" if row["Out_of_Range"] else "royalblue"
@@ -2181,21 +2331,26 @@ with tab8:
         hrom_ax.grid(alpha=0.3, axis="y")
         elements.append(fig_to_rl_image(hrom_fig, width_cm=16))
         elements.append(Spacer(1, 12))
+
         # ---- Clinical Findings ----
         elements.append(Paragraph(LB["clinical_findings_heading"], heading_style))
+
         pdf_findings = []
         shoulder_asym_value = asymmetry_results.get("Shoulder", 0)
         if shoulder_asym_value > 15:
             pdf_findings.append(LB["asym_finding"].format(joint="Shoulder", v=shoulder_asym_value))
+
         for _, row in comparison_df.iterrows():
             if row["Out_of_Range"]:
                 pdf_findings.append(LB["range_finding"].format(var=row["Variable"]))
+
         if len(pdf_findings) == 0:
             elements.append(Paragraph(LB["no_findings"], normal_style))
         else:
             for item in pdf_findings:
                 elements.append(Paragraph(f"・{item}", normal_style))
         elements.append(Spacer(1, 12))
+
         # ---- Clinical Impression（検者記入欄） ----
         elements.append(Paragraph(LB["clinical_impression_heading"], heading_style))
         comment_text = (
@@ -2205,19 +2360,23 @@ with tab8:
         )
         elements.append(Paragraph(comment_text, normal_style))
         elements.append(Spacer(1, 12))
+
         # ---- Movement Score（ハイライト表示・コンパクト） ----
         elements.append(Paragraph(LB["movement_score_heading"], heading_style))
         elements.append(Paragraph(
             LB["overall_score_label"].format(s=overall_score),
             score_style
         ))
+
         feature_rows = [[LB["feature_col"], LB["value_col"]]]
         for _, row in feature_df.iterrows():
             feature_rows.append([str(row["Feature"]), str(row["Value"])])
         feature_table = Table(feature_rows, hAlign="LEFT")
         feature_table.setStyle(TABLE_STYLE)
         elements.append(feature_table)
+
         doc.build(elements)
+
         st.download_button(
             UI["download_label"],
             data=report_buffer.getvalue(),
@@ -2225,5 +2384,5 @@ with tab8:
             mime="application/pdf",
             key="pdf_download_button_arm"
         )
+
         st.success(UI["success_message"])
- 
