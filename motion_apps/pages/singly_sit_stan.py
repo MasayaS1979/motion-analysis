@@ -17,14 +17,12 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import Image
 from reportlab.lib.enums import TA_CENTER
 from xml.sax.saxutils import escape
-
 pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
 pdfmetrics.registerFontFamily(
     "HeiseiKakuGo-W5",
     normal="HeiseiKakuGo-W5", bold="HeiseiKakuGo-W5",
     italic="HeiseiKakuGo-W5", boldItalic="HeiseiKakuGo-W5"
 )
-
 def fig_to_rl_image(fig, width_cm=16):
     buf = BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
@@ -2318,16 +2316,37 @@ with tab7:
     # =========================
     # Mobility Score
     # ROM Normality Based
+    #
+    # FIX (see chat): this used to compare the subject's ROM against
+    # a single hardcoded "target" value (healthy_hip_rom = 40, etc.)
+    # that was totally disconnected from the HEALTHY_ROM min/max
+    # ranges already defined above and used on the Healthy ROM
+    # Comparison tab. Any subject ROM that was a completely normal
+    # value under HEALTHY_ROM could still score near 0 here, because
+    # the old formula penalized ANY distance from the single target,
+    # including exceeding it (more mobility isn't necessarily bad).
+    #
+    # Now: reuse HEALTHY_ROM as the single source of truth. Full
+    # score (100) when the subject's ROM falls inside [min, max];
+    # otherwise the score decreases in proportion to how far outside
+    # the range it is, relative to the width of the healthy range.
     # =========================
  
     def calculate_rom_score(
         subject_rom,
-        healthy_rom
+        healthy_min,
+        healthy_max
     ):
  
-        deviation = abs(
-            subject_rom - healthy_rom
-        )
+        if healthy_min <= subject_rom <= healthy_max:
+            return 100.0
+ 
+        healthy_span = healthy_max - healthy_min
+ 
+        if subject_rom < healthy_min:
+            deviation = healthy_min - subject_rom
+        else:
+            deviation = subject_rom - healthy_max
  
         score = (
  
@@ -2336,7 +2355,7 @@ with tab7:
             (
                 deviation
                 /
-                healthy_rom
+                healthy_span
                 *
                 100
             )
@@ -2352,25 +2371,27 @@ with tab7:
         )
  
     # Healthy ROM Reference
-    # Single Sit-to-Stand
- 
-    healthy_hip_rom = 40
-    healthy_knee_rom = 60
-    healthy_ankle_rom = 30
+    # Reuses the same HEALTHY_ROM dict defined near the top of the
+    # file (single source of truth — matches the Healthy ROM
+    # Comparison tab) instead of separate, disconnected single-point
+    # targets.
  
     hip_score = calculate_rom_score(
         hip_rom,
-        healthy_hip_rom
+        HEALTHY_ROM[HIP]["min"],
+        HEALTHY_ROM[HIP]["max"]
     )
  
     knee_score = calculate_rom_score(
         knee_rom,
-        healthy_knee_rom
+        HEALTHY_ROM[KNEE]["min"],
+        HEALTHY_ROM[KNEE]["max"]
     )
  
     ankle_score = calculate_rom_score(
         ankle_rom,
-        healthy_ankle_rom
+        HEALTHY_ROM[ANKLE]["min"],
+        HEALTHY_ROM[ANKLE]["max"]
     )
  
     mobility_score = round(
@@ -2411,7 +2432,19 @@ with tab7:
  
     # =========================
     # Stability Score
+    #
+    # FIX (see chat): the previous "* 2" penalty factor was an
+    # untuned placeholder — realistic pelvic tilt/list excursion
+    # during a normal sit-to-stand can easily be 15-30°, which the
+    # old factor alone could crush to a 40-70 score even for a clean
+    # rep. Softened to "* 1" here as a less punitive default; treat
+    # this constant as something to calibrate against your own
+    # collected subject data (e.g. the mean/SD of pelvic_instability
+    # across a healthy reference sample) rather than a validated
+    # clinical threshold.
     # =========================
+ 
+    PELVIC_INSTABILITY_PENALTY_FACTOR = 1
  
     pelvic_instability = (
  
@@ -2425,7 +2458,7 @@ with tab7:
  
         max(
             0,
-            100 - pelvic_instability * 2
+            100 - pelvic_instability * PELVIC_INSTABILITY_PENALTY_FACTOR
         ),
  
         1
@@ -2434,7 +2467,13 @@ with tab7:
  
     # =========================
     # Compensation Score
+    #
+    # FIX (see chat): same issue and same fix as Stability Score
+    # above — the "* 2" factor was an untuned placeholder that overly
+    # punished normal-scale lumbar extension changes.
     # =========================
+ 
+    LUMBAR_COMPENSATION_PENALTY_FACTOR = 1
  
     lumbar_change = (
  
@@ -2448,7 +2487,7 @@ with tab7:
  
         max(
             0,
-            100 - lumbar_change * 2
+            100 - lumbar_change * LUMBAR_COMPENSATION_PENALTY_FACTOR
         ),
  
         1
@@ -2515,7 +2554,6 @@ with tab7:
         f"{overall_score}/100"
  
     )
-
 with tab8:
     lang_choice = st.radio(
         "レポート言語 / Report Language",
@@ -2588,7 +2626,6 @@ with tab8:
             for label, score in [("Hip", hip_score), ("Knee", knee_score), ("Ankle", ankle_score)]
             if score < 60
         ]
-
         # ---- Phase Statistics由来の所見 ----
         phase_stats_variables = {
             "Hip": hip_var,
@@ -2598,7 +2635,6 @@ with tab8:
             "Pelvic Rotation": "pelvis_rotation",
             "Lumbar Extension": "lumbar_extension",
         }
-
         # 1) Sitting / Standing フェーズでの姿勢安定性（Stdが大きい = 動揺あり）
         # ※ しきい値2.0°は仮の基準です。臨床基準に合わせて調整してください。
         STATIC_PHASES = ["Sitting", "Standing"]
@@ -2612,7 +2648,6 @@ with tab8:
                 std_v = var_row[f"{phase}_Std"].iloc[0]
                 if pd.notna(std_v) and std_v > STD_THRESHOLD:
                     instability_flags.append((stat_label, phase, std_v))
-
         # 2) 各関節でROMが最大となるフェーズ（主要な可動局面）
         joint_only_variables = {
             "Hip": hip_var,
@@ -2628,7 +2663,6 @@ with tab8:
             for phase in phase_order:
                 rom_by_phase[phase] = var_row[f"{phase}_ROM"].iloc[0]
             dominant_phase_per_joint[joint_name] = max(rom_by_phase, key=rom_by_phase.get)
-
         # 3) Rising（立ち上がり）と Lowering（着座）のROM差
         # （Squat/Sit-Standの Descending/Ascending に相当する局面比較）
         # ※ しきい値15%は左右対称性と同じ基準を仮採用しています。
@@ -2646,7 +2680,6 @@ with tab8:
             diff_pct = abs(rising_val - lowering_val) / max(rising_val, lowering_val) * 100
             if diff_pct > 15:
                 ecc_con_flags.append((joint_name, rising_val, lowering_val, diff_pct))
-
         if lang_code == "ja":
             side_label = "右" if analysis_side == "Right" else "左"
             if overall_score >= 80:
@@ -3035,9 +3068,9 @@ with tab8:
         elements.append(Paragraph(LB["joint_rom_analysis_heading"].format(side=ANALYSIS_SIDE), heading_style))
         rom_analysis_data = [
             [LB["joint_col"], LB["rom_col"], LB["healthy_ref_col"], LB["jra_score_col"]],
-            ["Hip", f"{hip_rom:.1f}", f"{healthy_hip_rom}", f"{hip_score:.0f}"],
-            ["Knee", f"{knee_rom:.1f}", f"{healthy_knee_rom}", f"{knee_score:.0f}"],
-            ["Ankle", f"{ankle_rom:.1f}", f"{healthy_ankle_rom}", f"{ankle_score:.0f}"],
+            ["Hip", f"{hip_rom:.1f}", f"{HEALTHY_ROM[HIP]['min']:.0f}-{HEALTHY_ROM[HIP]['max']:.0f}", f"{hip_score:.0f}"],
+            ["Knee", f"{knee_rom:.1f}", f"{HEALTHY_ROM[KNEE]['min']:.0f}-{HEALTHY_ROM[KNEE]['max']:.0f}", f"{knee_score:.0f}"],
+            ["Ankle", f"{ankle_rom:.1f}", f"{HEALTHY_ROM[ANKLE]['min']:.0f}-{HEALTHY_ROM[ANKLE]['max']:.0f}", f"{ankle_score:.0f}"],
         ]
         rom_analysis_table = Table(rom_analysis_data, colWidths=[4*cm, 4*cm, 5*cm, 3*cm])
         rom_analysis_table.setStyle(TABLE_STYLE)
@@ -3046,10 +3079,14 @@ with tab8:
         fig_rom_pdf, ax_rom_pdf = plt.subplots(figsize=(8, 4))
         joint_labels = ["Hip", "Knee", "Ankle"]
         subject_values = [hip_rom, knee_rom, ankle_rom]
-        healthy_values = [healthy_hip_rom, healthy_knee_rom, healthy_ankle_rom]
+        healthy_mid_values = [
+            (HEALTHY_ROM[HIP]["min"] + HEALTHY_ROM[HIP]["max"]) / 2,
+            (HEALTHY_ROM[KNEE]["min"] + HEALTHY_ROM[KNEE]["max"]) / 2,
+            (HEALTHY_ROM[ANKLE]["min"] + HEALTHY_ROM[ANKLE]["max"]) / 2,
+        ]
         x_pos = range(len(joint_labels))
         ax_rom_pdf.bar([x - 0.2 for x in x_pos], subject_values, width=0.4, label="Subject", color="dodgerblue")
-        ax_rom_pdf.bar([x + 0.2 for x in x_pos], healthy_values, width=0.4, label="Healthy Reference", color="lightgray")
+        ax_rom_pdf.bar([x + 0.2 for x in x_pos], healthy_mid_values, width=0.4, label="Healthy Reference (mid)", color="lightgray")
         ax_rom_pdf.set_xticks(list(x_pos))
         ax_rom_pdf.set_xticklabels(joint_labels)
         ax_rom_pdf.set_ylabel("ROM (°)")
@@ -3164,3 +3201,4 @@ with tab8:
             key="pdf_download_button_single"
         )
         st.success(UI["success_message"])
+ 
