@@ -3043,7 +3043,7 @@ with tab9:
  
     if st.button(CUI["generate_button"], key="client_report_generate_btn"):
  
-        from reportlab.platypus import PageBreak, HRFlowable
+        from reportlab.platypus import HRFlowable
  
         # ---- 動的な所見の収集（実測値ベース） ----
         abnormal_rows = comparison_df[comparison_df["Status"] == "Abnormal"]
@@ -3072,7 +3072,7 @@ with tab9:
                 if pelvic_obliquity_rom > 10:
                     parts.append(f"骨盤の横の傾き {pelvic_obliquity_rom:.1f}°")
                 concern_items.append((
-                    "体幹・骨盤が代償しやすい",
+                    "体幹・骨盤の代償",
                     f"歩いている間、{'・'.join(parts)}と、体幹や骨盤の動きが大きくなる場面が見られました。"
                     "この状態が続くと、腰まわりへの負担が蓄積しやすくなります。"
                 ))
@@ -3124,7 +3124,7 @@ with tab9:
         if concern_flags["stability"]:
             if client_lang_code == "ja":
                 concern_items.append((
-                    "歩行中の骨盤のグラつき",
+                    "骨盤のグラつき",
                     "歩いている間、骨盤が左右に揺れる場面がありました。"
                     "体幹やお尻まわりの筋力を使って、安定して支える意識をすると歩きやすくなります。"
                 ))
@@ -3382,15 +3382,11 @@ with tab9:
         bars_table_c.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
         elements_c.append(bars_table_c)
  
-        elements_c.append(Spacer(1, 0.25 * cm))
-        elements_c.append(HRFlowable(width="100%", thickness=0.6, color=colors.HexColor(LINE_HEX_C)))
-        elements_c.append(Spacer(1, 0.12 * cm))
-        elements_c.append(Paragraph(
-            "続きは次のページで、動きの流れとおすすめアクションをご紹介します。" if client_lang_code == "ja"
-            else "Continued on the next page: movement flow and recommended actions.",
-            c_page_label_style
-        ))
-        elements_c.append(PageBreak())
+        # 5枚のスコアカードでページ1がすでに埋まっている場合、区切り線と
+        # 「続きは次のページで」の一文だけがページ2に押し出され、その直後の
+        # 強制改ページでほぼ空白のページができてしまう不具合があったため、
+        # 区切り線・案内文・強制改ページ(PageBreak)は使わず、自然な改ページに任せる。
+        elements_c.append(Spacer(1, 0.3 * cm))
  
         elements_c.append(Paragraph("動きの流れをチェック" if client_lang_code == "ja" else "Movement Flow", c_section_style))
         elements_c.append(Paragraph(
@@ -3428,15 +3424,19 @@ with tab9:
  
         elements_c.append(Paragraph("気になるポイント" if client_lang_code == "ja" else "Points to Note", c_section_style))
         for title, desc in concern_items:
+            # 赤丸(●)を専用の列に固定し、タイトルが折り返しても
+            # ●が本文と分離してずれて見えないようにする。
             row_c = Table(
-                [[Paragraph(f"<font color='#C62828'><b>●</b></font>  <b>{title}</b>", c_action_body_style),
+                [[Paragraph("<font color='#C62828'><b>●</b></font>", c_action_body_style),
+                  Paragraph(f"<b>{title}</b>", c_action_body_style),
                   Paragraph(desc, c_action_body_style)]],
-                colWidths=[4.4 * cm, 14.6 * cm]
+                colWidths=[0.5 * cm, 3.9 * cm, 14.6 * cm]
             )
             row_c.setStyle(TableStyle([
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("TOPPADDING", (0, 0), (-1, -1), 4),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (1, 0), (1, -1), 0),
             ]))
             elements_c.append(row_c)
         elements_c.append(Spacer(1, 0.16 * cm))
