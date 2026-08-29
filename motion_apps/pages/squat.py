@@ -2662,6 +2662,13 @@ with tab9:
         "ja": {
             "header": "クライアント向けレポート",
             "caption": "専門用語を減らし、スコアと図解を中心にした、対象者本人にそのまま渡せるレポートです。",
+            "subject_name": "対象者名",
+            "exam_date": "測定日",
+            "examiner": "検者",
+            "comment_heading": "総合コメント",
+            "comment_label": "対象者向けの総合コメントを記入してください（PDFに反映されます）",
+            "auto_generate_button": "🪄 コメントを自動生成（下書き）",
+            "auto_generate_caption": "実測値をもとに、専門用語を減らした下書きコメントを自動生成します。内容を確認・編集してからPDFを生成してください。",
             "generate_button": "📄 クライアント向けレポートを生成",
             "download_label": "📥 クライアント向けレポートをダウンロード",
             "success_message": "クライアント向けレポートを生成しました。上のボタンからダウンロードしてください。",
@@ -2669,6 +2676,13 @@ with tab9:
         "en": {
             "header": "Client Report",
             "caption": "A plain-language report with scores and visuals, ready to hand directly to the client.",
+            "subject_name": "Subject Name",
+            "exam_date": "Exam Date",
+            "examiner": "Examiner",
+            "comment_heading": "Comment",
+            "comment_label": "Enter an overall comment for the client (included in the PDF)",
+            "auto_generate_button": "🪄 Auto-generate Comment (Draft)",
+            "auto_generate_caption": "Generates a plain-language draft comment from the measured values. Please review and edit before generating the PDF.",
             "generate_button": "📄 Generate Client Report",
             "download_label": "📥 Download Client Report",
             "success_message": "Client report generated. Use the button above to download it.",
@@ -2678,11 +2692,20 @@ with tab9:
  
     st.subheader(CUI["header"])
     st.caption(CUI["caption"])
-    st.caption(
-        "対象者名・測定日・検者は「PDF Report」タブの入力欄と共通です。"
-        if client_lang_code == "ja"
-        else "Subject name, exam date, and examiner are shared with the “PDF Report” tab's fields."
-    )
+ 
+    client_col1, client_col2, client_col3 = st.columns(3)
+    with client_col1:
+        client_subject_name = st.text_input(
+            CUI["subject_name"], value="", key="client_subject_name_input"
+        )
+    with client_col2:
+        client_exam_date = st.text_input(
+            CUI["exam_date"], value="", key="client_exam_date_input"
+        )
+    with client_col3:
+        client_examiner_name = st.text_input(
+            CUI["examiner"], value="", key="client_examiner_name_input"
+        )
  
     JOINT_LABEL = {
         "ja": {
@@ -2780,6 +2803,94 @@ with tab9:
         tax.axis("off")
         tfig.tight_layout()
         return fig_to_rl_image(tfig, width_cm=16)
+ 
+    def generate_client_auto_comment(
+        lang_code, overall_score, mobility_score, stability_score, symmetry_score, compensation_score,
+        asymmetry_results, comparison_df, lumbar_compensation, pelvic_compensation, pelvic_rotation_rom
+    ):
+        # tab8のgenerate_squat_auto_commentの平易版。専門用語を避け、対象者本人が読んでも
+        # 分かる言葉で下書きコメントを組み立てる。実測値ベースで動的に生成される。
+        asym_flags = [(joint, value) for joint, value in asymmetry_results.items() if value > 15]
+ 
+        if lang_code == "ja":
+            if overall_score >= 80:
+                lines = [f"今回の総合スコアは{overall_score:.0f}/100で、とても良い状態です。"]
+            elif overall_score >= 60:
+                lines = [f"今回の総合スコアは{overall_score:.0f}/100でした。全体的には悪くありませんが、いくつか気をつけたい点があります。"]
+            else:
+                lines = [f"今回の総合スコアは{overall_score:.0f}/100でした。いくつか改善していきたいポイントが見つかりました。"]
+ 
+            if mobility_score >= 80:
+                lines.append("しゃがむ深さ（可動域）はしっかり出せています。")
+            else:
+                lines.append("しゃがむ深さ（可動域）には、まだ伸びしろがあります。")
+ 
+            if symmetry_score >= 80:
+                lines.append("左右の動きもよく揃っていました。")
+            elif asym_flags:
+                joint_text = "・".join(JOINT_SIMPLE_JA.get(j, j) for j, _ in asym_flags)
+                lines.append(f"{joint_text}を中心に、左右の動きにやや差が見られました。")
+ 
+            if stability_score >= 80 and compensation_score >= 80:
+                lines.append("動作中の姿勢も安定しており、腰や骨盤への負担も少なめです。")
+            else:
+                notes = []
+                if stability_score < 80:
+                    notes.append("動作中に骨盤が少し揺れやすい")
+                if compensation_score < 80:
+                    notes.append("しゃがむ・立ち上がる際に腰や骨盤が反りやすい")
+                if notes:
+                    lines.append("、また".join(notes) + "傾向が見られました。")
+ 
+            lines.append("次回までに、下のおすすめアクションを無理のない範囲で続けてみましょう。")
+            return "\n".join(lines)
+        else:
+            if overall_score >= 80:
+                lines = [f"This check scored {overall_score:.0f}/100 overall — a great result."]
+            elif overall_score >= 60:
+                lines = [f"This check scored {overall_score:.0f}/100 overall. Things look reasonably good, with a few points worth keeping an eye on."]
+            else:
+                lines = [f"This check scored {overall_score:.0f}/100 overall. A few areas stood out that are worth working on."]
+ 
+            if mobility_score >= 80:
+                lines.append("Squat depth (mobility) looks solid.")
+            else:
+                lines.append("There's room to improve squat depth (mobility).")
+ 
+            if symmetry_score >= 80:
+                lines.append("The left and right sides moved very evenly.")
+            elif asym_flags:
+                joint_text = ", ".join(j for j, _ in asym_flags)
+                lines.append(f"Some left-right difference was seen, mainly around the {joint_text}.")
+ 
+            if stability_score >= 80 and compensation_score >= 80:
+                lines.append("Posture stayed steady throughout, with little strain on the lower back or pelvis.")
+            else:
+                notes = []
+                if stability_score < 80:
+                    notes.append("some pelvic wobble during the movement")
+                if compensation_score < 80:
+                    notes.append("a tendency for the lower back/pelvis to arch while squatting")
+                if notes:
+                    lines.append("We noticed " + " and ".join(notes) + ".")
+ 
+            lines.append("Try working through the recommended actions below at a comfortable pace before the next check.")
+            return "\n".join(lines)
+ 
+    st.markdown(f"#### {CUI['comment_heading']}")
+    if "client_report_comment" not in st.session_state:
+        st.session_state["client_report_comment"] = ""
+    if st.button(CUI["auto_generate_button"], key="client_report_auto_comment_btn"):
+        st.session_state["client_report_comment"] = generate_client_auto_comment(
+            client_lang_code, overall_score, mobility_score, stability_score, symmetry_score, compensation_score,
+            asymmetry_results, comparison_df, lumbar_compensation, pelvic_compensation, pelvic_rotation_rom
+        )
+    st.caption(CUI["auto_generate_caption"])
+    client_comment = st.text_area(
+        CUI["comment_label"],
+        key="client_report_comment",
+        height=150
+    )
  
     if st.button(CUI["generate_button"], key="client_report_generate_btn"):
  
@@ -3006,9 +3117,9 @@ with tab9:
                 c_title_style
             )],
                 [Paragraph(
-                    (f"対象者：{subject_name or '-'}　｜　測定日：{exam_date or '-'}　｜　スマートフォン動画による簡易動作分析"
+                    (f"対象者：{client_subject_name or '-'}　｜　測定日：{client_exam_date or '-'}　｜　検者：{client_examiner_name or '-'}"
                      if client_lang_code == "ja" else
-                     f"Subject: {subject_name or '-'}  |  Exam Date: {exam_date or '-'}  |  Simplified analysis from smartphone video"),
+                     f"Subject: {client_subject_name or '-'}  |  Exam Date: {client_exam_date or '-'}  |  Examiner: {client_examiner_name or '-'}"),
                     c_subtitle_style
                 )]],
             colWidths=[19 * cm]
@@ -3076,8 +3187,8 @@ with tab9:
         elements_c.append(HRFlowable(width="100%", thickness=0.6, color=colors.HexColor(LINE_HEX_C)))
         elements_c.append(Spacer(1, 0.12 * cm))
         elements_c.append(Paragraph(
-            "1 / 2　－　続きは次のページで、動きの流れとおすすめアクションをご紹介します。" if client_lang_code == "ja"
-            else "1 / 2  -  Continued on the next page: movement flow and recommended actions.",
+            "続きは次のページで、動きの流れとおすすめアクションをご紹介します。" if client_lang_code == "ja"
+            else "Continued on the next page: movement flow and recommended actions.",
             c_page_label_style
         ))
         elements_c.append(PageBreak())
@@ -3129,6 +3240,14 @@ with tab9:
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ]))
             elements_c.append(row_c)
+        elements_c.append(Spacer(1, 0.16 * cm))
+ 
+        elements_c.append(Paragraph(CUI["comment_heading"], c_section_style))
+        comment_display = client_comment.strip() if client_comment and client_comment.strip() else (
+            "(記入なし)" if client_lang_code == "ja" else "(No comment entered)"
+        )
+        comment_html = escape(comment_display).replace("\n", "<br/>")
+        elements_c.append(Paragraph(comment_html, c_body_style))
         elements_c.append(Spacer(1, 0.16 * cm))
  
         elements_c.append(Paragraph(
@@ -3222,13 +3341,37 @@ with tab9:
              "If you experience pain or significant discomfort, please consult a healthcare professional."),
             c_footer_style
         ))
-        elements_c.append(Paragraph("2 / 2", c_page_label_style))
- 
         def draw_client_bg(canvas, doc_):
             canvas.saveState()
             canvas.setFillColor(colors.HexColor("#FAFAFA"))
             canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
             canvas.restoreState()
+ 
+        # ページ数は「気になるポイント」の件数やコメントの長さによって変わるため、
+        # 固定の「1/2」を書く代わりに、実際の総ページ数を描画時に計算してfooterに描く。
+        from reportlab.pdfgen import canvas as canvas_module
+ 
+        class _ClientReportNumberedCanvas(canvas_module.Canvas):
+            def __init__(self, *args, **kwargs):
+                canvas_module.Canvas.__init__(self, *args, **kwargs)
+                self._saved_page_states = []
+ 
+            def showPage(self):
+                self._saved_page_states.append(dict(self.__dict__))
+                self._startPage()
+ 
+            def save(self):
+                total_pages = len(self._saved_page_states)
+                for state in self._saved_page_states:
+                    self.__dict__.update(state)
+                    self._draw_totalized_page_number(total_pages)
+                    canvas_module.Canvas.showPage(self)
+                canvas_module.Canvas.save(self)
+ 
+            def _draw_totalized_page_number(self, total_pages):
+                self.setFont("HeiseiKakuGo-W5", 8)
+                self.setFillColor(colors.HexColor("#607D8B"))
+                self.drawString(1.6 * cm, 1.0 * cm, f"{self._pageNumber} / {total_pages}")
  
         client_report_buffer = BytesIO()
         client_doc = SimpleDocTemplate(
@@ -3237,7 +3380,12 @@ with tab9:
             topMargin=1.4 * cm, bottomMargin=1.4 * cm,
             leftMargin=1.6 * cm, rightMargin=1.6 * cm
         )
-        client_doc.build(elements_c, onFirstPage=draw_client_bg, onLaterPages=draw_client_bg)
+        client_doc.build(
+            elements_c,
+            onFirstPage=draw_client_bg,
+            onLaterPages=draw_client_bg,
+            canvasmaker=_ClientReportNumberedCanvas
+        )
  
         st.download_button(
             CUI["download_label"],
