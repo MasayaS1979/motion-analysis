@@ -1821,17 +1821,64 @@ with tab7:
     # =========================
     # Movement Score
     # =========================
- 
+
     symmetry_score = max(0, 100 - shoulder_asymmetry)
- 
-    mobility_score = min(100, shoulder_rom / 180 * 100)
- 
+
+    # FIX: mobility_score used to be a simple linear scale
+    # (shoulder_rom / 180 * 100), completely disconnected from the
+    # HEALTHY_ROM range already defined above. A subject with a
+    # perfectly healthy ROM (e.g. 160°) could score under 90 just
+    # because of the linear scaling. Now: reuse HEALTHY_ROM as the
+    # single source of truth, same approach as single_sit_stand.py.
+    # Full score (100) when the subject's ROM falls inside
+    # [min, max]; otherwise the score decreases in proportion to how
+    # far outside the range it is, relative to the width of the
+    # healthy range.
+    def calculate_rom_score(subject_rom, healthy_min, healthy_max):
+        if healthy_min <= subject_rom <= healthy_max:
+            return 100.0
+        healthy_span = healthy_max - healthy_min
+        if subject_rom < healthy_min:
+            deviation = healthy_min - subject_rom
+        else:
+            deviation = subject_rom - healthy_max
+        score = 100 - (deviation / healthy_span * 100)
+        return max(0, round(score, 1))
+
+    # arm_flex_r / arm_flex_l share the same HEALTHY_ROM range
+    # (160-180) in this file, and shoulder_rom is already the
+    # average of both sides, so applying the arm_flex_r range to it
+    # is consistent.
+    mobility_score = calculate_rom_score(
+        shoulder_rom,
+        HEALTHY_ROM["arm_flex_r"]["min"],
+        HEALTHY_ROM["arm_flex_r"]["max"]
+    )
+
     lumbar_score = max(0, 100 - lumbar_compensation * 1.5)
- 
-    pelvis_score = max(0, 100 - pelvis_compensation * 2)
- 
+
+    # FIX: pelvis_score previously only accounted for pelvis_tilt
+    # compensation; pelvis_rotation_compensation was already
+    # calculated and shown in Key Metrics / PDF reports but was
+    # silently excluded from the score. Folded it into the same
+    # "pelvis" bucket (rather than adding a 5th weighted category)
+    # so the existing weight split (symmetry 0.30 / mobility 0.40 /
+    # lumbar 0.15 / pelvis 0.15) doesn't need to be renormalized —
+    # same approach as single_sit_stand.py's stability_score, which
+    # combines pelvis_tilt_change + pelvis_list_change into one
+    # measure.
+    # PELVIS_PENALTY_FACTOR is an untuned placeholder like the other
+    # penalty factors in this file — adjust to your own reference
+    # data if you have one.
+    PELVIS_PENALTY_FACTOR = 1
+
+    pelvis_score = max(
+        0,
+        100 - (pelvis_compensation + pelvis_rotation_compensation) * PELVIS_PENALTY_FACTOR
+    )
+
     overall_score = round(
- 
+
         (
             symmetry_score * 0.30
             +
@@ -1841,21 +1888,8 @@ with tab7:
             +
             pelvis_score * 0.15
         ),
- 
+
         1
-    )
- 
-    st.subheader("Movement Score")
- 
-    st.caption(t("arm_flexion.score_caption"))
- 
-    with st.expander(t("common.score_expander_label")):
- 
-        st.markdown(t("arm_flexion.score_content"))
- 
-    st.metric(
-        "Overall Score",
-        f"{overall_score}/100"
     )
 # =========================
 # PDF Report
