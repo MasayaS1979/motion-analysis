@@ -1829,136 +1829,137 @@ with tab6:
 # Movement Score
 # =========================
 with tab7:
- 
+
     # =========================
     # Movement Features
     # =========================
- 
+
     st.subheader("Movement Features")
- 
+
     st.caption(t("squat.feature_caption"))
- 
+
     with st.expander(t("common.feature_expander_label")):
- 
+
         st.markdown(t("squat.feature_table"))
- 
+
     squat_depth = pelvis_max - pelvis_min
- 
-    pelvis_stability = df_phase["pelvis_list"].std()
- 
-    trunk_compensation = df_phase["lumbar_extension"].max()
- 
+
+    static_mask = df_phase["Phase"].isin(["Standing", "Bottom"])
+    pelvis_stability = df_phase.loc[static_mask, "pelvis_list"].std()
+
+    trunk_compensation = df_phase["lumbar_extension"].abs().max()
+
     hip_asymmetry = asymmetry_results["Hip"]
- 
+
     knee_asymmetry = asymmetry_results["Knee"]
- 
+
     ankle_asymmetry = asymmetry_results["Ankle"]
- 
+
     feature_df = pd.DataFrame({
- 
+
         "Feature": [
- 
+
             "Squat Depth",
- 
+
             "Pelvic Stability",
- 
+
             "Lumbar Compensation",
- 
+
             "Hip Asymmetry",
- 
+
             "Knee Asymmetry",
- 
+
             "Ankle Asymmetry"
- 
+
         ],
- 
+
         "Value": [
- 
+
             round(squat_depth, 3),
- 
+
             round(pelvis_stability, 2),
- 
+
             round(trunk_compensation, 2),
- 
+
             round(hip_asymmetry, 2),
- 
+
             round(knee_asymmetry, 2),
- 
+
             round(ankle_asymmetry, 2)
- 
+
         ]
     })
- 
+
     # =========================
     # Plotly Feature Table
     # =========================
- 
+
     fig = go.Figure(
- 
+
         data=[
- 
+
             go.Table(
- 
+
                 columnwidth=[250, 120],
- 
+
                 header=dict(
- 
+
                     values=["Feature", "Value"],
- 
+
                     fill_color="black",
- 
+
                     font=dict(color="white", size=16),
- 
+
                     align="center",
- 
+
                     line=dict(color="white", width=1)
- 
+
                 ),
- 
+
                 cells=dict(
- 
+
                     values=[
                         feature_df["Feature"],
                         feature_df["Value"]
                     ],
- 
+
                     fill_color="black",
- 
+
                     height=45,
- 
+
                     font=dict(color="white", size=15),
- 
+
                     align="center",
- 
+
                     line=dict(color="white", width=1)
- 
+
                 )
- 
+
             )
- 
+
         ]
- 
- 
+
+
     )
- 
+
     fig.update_layout(
- 
+
         height=230,
- 
+
         margin=dict(l=10, r=10, t=10, b=5),
- 
+
         paper_bgcolor="black",
- 
+
         plot_bgcolor="black"
- 
+
     )
- 
+
     st.plotly_chart(fig, use_container_width=True)
- 
+
     # =========================
     # Movement Score
     # =========================
- 
+
     overall_asymmetry = (
         hip_asymmetry
         +
@@ -1966,17 +1967,17 @@ with tab7:
         +
         ankle_asymmetry
     ) / 3
- 
-    symmetry_score = max(0, 100 - overall_asymmetry)
- 
-    stability_score = max(0, 100 - pelvis_stability * 10)
- 
-    compensation_score = max(0, 100 - trunk_compensation * 2)
- 
-    mobility_score = min(100, squat_depth * 500)
- 
+
+    symmetry_score = max(0, min(100, 100 - overall_asymmetry))
+
+    stability_score = max(0, min(100, 100 - pelvis_stability * 10))
+
+    compensation_score = max(0, min(100, 100 - trunk_compensation * 2))
+
+    mobility_score = max(0, min(100, squat_depth * 500))
+
     overall_score = round(
- 
+
         (
             symmetry_score * 0.35
             +
@@ -1986,18 +1987,18 @@ with tab7:
             +
             mobility_score * 0.10
         ),
- 
+
         1
     )
- 
+
     st.subheader("Movement Score")
- 
+
     st.caption(t("squat.score_caption"))
- 
+
     with st.expander(t("common.score_expander_label")):
- 
+
         st.markdown(t("squat.score_content"))
- 
+
     st.metric(
         "Overall Score",
         f"{overall_score}/100"
