@@ -201,62 +201,40 @@ for p, v in zip(signal_smooth, velocity):
 # -------------------------
  
 def keep_nearest_cluster(phase_list, target_label, target_idx):
- 
     phase_list = list(phase_list)
- 
-    # Find every contiguous run of target_label
     runs = []
     run_start = None
- 
     for i, p in enumerate(phase_list):
- 
         if p == target_label:
- 
             if run_start is None:
                 run_start = i
- 
         else:
- 
             if run_start is not None:
                 runs.append((run_start, i - 1))
                 run_start = None
- 
     if run_start is not None:
         runs.append((run_start, len(phase_list) - 1))
- 
     if len(runs) <= 1:
         return phase_list
- 
+
     def distance_to_target(run):
- 
         start, end = run
- 
         if start <= target_idx <= end:
             return 0
- 
-        return min(
-            abs(target_idx - start),
-            abs(target_idx - end)
-        )
- 
+        return min(abs(target_idx - start), abs(target_idx - end))
+
     keep_run = min(runs, key=distance_to_target)
- 
     for start, end in runs:
- 
         if (start, end) == keep_run:
             continue
- 
-        # Fold this stray cluster back into whatever phase came
-        # right before it started.
-        fallback_label = (
-            phase_list[start - 1]
-            if start > 0
-            else target_label
-        )
- 
+        if start > 0:
+            fallback_label = phase_list[start - 1]
+        elif end + 1 < len(phase_list):
+            fallback_label = phase_list[end + 1]
+        else:
+            fallback_label = target_label
         for i in range(start, end + 1):
             phase_list[i] = fallback_label
- 
     return phase_list
  
 phases = keep_nearest_cluster(phases, "Sitting", sitting_idx)
@@ -2120,11 +2098,9 @@ with tab7:
     )
  
     pelvic_shift = (
- 
-        df_phase["pelvis_tx"]
-        .abs()
-        .max()
- 
+    df_phase["pelvis_tx"].max()
+    -
+    df_phase["pelvis_tx"].min()
     )
  
     trunk_compensation = round(
@@ -2448,24 +2424,11 @@ with tab7:
  
     PELVIC_INSTABILITY_PENALTY_FACTOR = 1
  
-    pelvic_instability = (
- 
-        abs(pelvis_tilt_change)
-        +
-        abs(pelvis_list_change)
- 
-    )
- 
-    stability_score = round(
- 
-        max(
-            0,
-            100 - pelvic_instability * PELVIC_INSTABILITY_PENALTY_FACTOR
-        ),
- 
-        1
- 
-    )
+    pelvic_instability = (abs(pelvis_tilt_change) + abs(pelvis_list_change))
+    stability_score = round(max(0, 100 - pelvic_instability * PELVIC_INSTABILITY_PENALTY_FACTOR), 1)
+
+    lumbar_change = (df_phase["lumbar_extension"].max() - df_phase["lumbar_extension"].min())
+    compensation_score = round(max(0, 100 - lumbar_change * LUMBAR_COMPENSATION_PENALTY_FACTOR), 1)
  
     # =========================
     # Compensation Score
