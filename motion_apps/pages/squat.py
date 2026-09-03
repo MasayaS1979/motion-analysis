@@ -287,6 +287,20 @@ phases = keep_nearest_cluster(phases, "Standing", standing_idx)
 df["Phase"] = phases
  
 df_phase = df.copy()
+
+static_mask = df_phase["Phase"].isin(["Standing", "Bottom"])
+static_pelvis_list = df_phase.loc[static_mask, "pelvis_list"]
+
+print("使われているフレーム数:", static_mask.sum())
+print(static_pelvis_list.describe())
+print("std:", static_pelvis_list.std())
+
+runs = (df_phase["Phase"] != df_phase["Phase"].shift()).cumsum()
+print(
+    df_phase.groupby(runs)["Phase"]
+    .agg(["first", "size"])
+    .query("first in ['Standing', 'Bottom']")
+)
  
 # =========================
 # Phase Summary
