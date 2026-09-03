@@ -1859,8 +1859,9 @@ with tab7:
 
     squat_depth = pelvis_max - pelvis_min
 
-    static_mask = df_phase["Phase"].isin(["Standing", "Bottom"])
-    pelvis_stability = df_phase.loc[static_mask, "pelvis_list"].std()
+    standing_std = df_phase.loc[df_phase["Phase"] == "Standing", "pelvis_list"].std()
+    bottom_std = df_phase.loc[df_phase["Phase"] == "Bottom", "pelvis_list"].std()
+    pelvis_stability = np.nanmean([standing_std, bottom_std])
 
     trunk_compensation = df_phase["lumbar_extension"].abs().max()
 
