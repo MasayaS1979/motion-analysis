@@ -231,65 +231,63 @@ for p, v in zip(signal_smooth, velocity):
 # -------------------------
  
 def keep_nearest_cluster(phase_list, target_label, target_idx):
- 
+
     phase_list = list(phase_list)
- 
-    # Find every contiguous run of target_label
+
     runs = []
     run_start = None
- 
+
     for i, p in enumerate(phase_list):
- 
+
         if p == target_label:
- 
+
             if run_start is None:
                 run_start = i
- 
+
         else:
- 
+
             if run_start is not None:
                 runs.append((run_start, i - 1))
                 run_start = None
- 
+
     if run_start is not None:
         runs.append((run_start, len(phase_list) - 1))
- 
+
     if len(runs) <= 1:
         return phase_list
- 
+
     def distance_to_target(run):
- 
+
         start, end = run
- 
+
         if start <= target_idx <= end:
             return 0
- 
+
         return min(
             abs(target_idx - start),
             abs(target_idx - end)
         )
- 
+
     keep_run = min(runs, key=distance_to_target)
- 
+
     for start, end in runs:
- 
+
         if (start, end) == keep_run:
             continue
- 
-        # Fold this stray cluster back into whatever phase came
-        # right before it started (there is always a preceding
-        # frame, since the very first frame is only ever "Bottom"
-        # via the pd.isna(v) branch, which is itself part of the
-        # earliest Bottom run).
-        fallback_label = (
-            phase_list[start - 1]
-            if start > 0
-            else target_label
-        )
- 
+
+        # 直前のフェーズに畳み込む。ただしstart==0（試技の一番最初から
+        # このラベルが始まっている場合）は"直前"が無いので、代わりに
+        # 直後のフェーズ（このクラスタの終わりの次のフレーム）に畳み込む。
+        if start > 0:
+            fallback_label = phase_list[start - 1]
+        elif end + 1 < len(phase_list):
+            fallback_label = phase_list[end + 1]
+        else:
+            fallback_label = target_label  # 全フレームがこのラベルの極端なケース
+
         for i in range(start, end + 1):
             phase_list[i] = fallback_label
- 
+
     return phase_list
  
 phases = keep_nearest_cluster(phases, "Bottom", bottom_idx)
@@ -2434,10 +2432,10 @@ with tab7:
     )
  
     pelvic_shift = (
-        df_phase["pelvis_tx"]
-        .abs()
-        .max()
-    )
+      df_phase["pelvis_tx"].max()
+      -
+      df_phase["pelvis_tx"].min()
+　　　)
  
     # Lumbar compensation = ROM of lumbar extension (max - min),
     # matching the definition given above and the KPI metric.
@@ -2640,36 +2638,13 @@ with tab7:
  
     # Symmetry Score
  
-    symmetry_score = max(
-        0,
-        100 - overall_asymmetry
-    )
- 
-    stability_score = max(
- 
-        0,
- 
-        100 -
-        pelvic_shift * 100
- 
-    )
- 
-    compensation_score = max(
- 
-        0,
- 
-        100 -
-        trunk_compensation * 2
- 
-    )
- 
-    mobility_score = min(
- 
-        100,
- 
-        seat_off_height * 500
- 
-    )
+    symmetry_score = max(0, min(100, 100 - overall_asymmetry))
+
+    stability_score = max(0, min(100, 100 - pelvic_shift * 100))
+
+    compensation_score = max(0, min(100, 100 - trunk_compensation * 2))
+
+    mobility_score = max(0, min(100, seat_off_height * 500))
  
     overall_score = round(
  
