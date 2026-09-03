@@ -287,6 +287,9 @@ phases = keep_nearest_cluster(phases, "Standing", standing_idx)
 df["Phase"] = phases
  
 df_phase = df.copy()
+
+st.write(df_phase.groupby("Phase")["lumbar_extension"].agg(["mean", "std", "min", "max"]))
+st.write("trunk_compensation:", trunk_compensation)
  
 # =========================
 # Phase Summary
