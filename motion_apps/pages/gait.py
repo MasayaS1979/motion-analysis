@@ -2070,9 +2070,53 @@ with tab7:
         100 - abs(lumbar_extension_rom - 10) * 5
     )
  
-    mobility_score = min(
-        100,
-        (max_hip_rom + max_knee_rom + max_ankle_rom) / 2
+    # FIX: mobility_score used to be a simple sum-of-ROM divided by 2,
+    # completely disconnected from HEALTHY_ROM. Even a subject with
+    # perfectly mid-range healthy ROM (hip ~40° + knee ~65° + ankle
+    # ~30° = 135° total) could only reach ~67.5 points, with no
+    # realistic way to score near 100. Now: reuse HEALTHY_ROM as the
+    # single source of truth per joint, same approach as
+    # single_sit_stand.py / arm_flexion.py. Full score (100) when a
+    # joint's ROM falls inside its HEALTHY_ROM [min, max]; otherwise
+    # the score decreases in proportion to how far outside the range
+    # it is, relative to the width of the healthy range. The three
+    # joint scores are then averaged.
+    def calculate_rom_score(subject_rom, healthy_min, healthy_max):
+        if healthy_min <= subject_rom <= healthy_max:
+            return 100.0
+        healthy_span = healthy_max - healthy_min
+        if subject_rom < healthy_min:
+            deviation = healthy_min - subject_rom
+        else:
+            deviation = subject_rom - healthy_max
+        score = 100 - (deviation / healthy_span * 100)
+        return max(0, round(score, 1))
+
+    # hip_flexion_r/l, knee_angle_r/l, ankle_angle_r/l share the same
+    # HEALTHY_ROM range per joint in this file, so applying the _r
+    # range to max_hip_rom / max_knee_rom / max_ankle_rom (already
+    # "max of left/right ROM") is consistent.
+    hip_mobility_score = calculate_rom_score(
+        max_hip_rom,
+        HEALTHY_ROM["hip_flexion_r"]["min"],
+        HEALTHY_ROM["hip_flexion_r"]["max"]
+    )
+
+    knee_mobility_score = calculate_rom_score(
+        max_knee_rom,
+        HEALTHY_ROM["knee_angle_r"]["min"],
+        HEALTHY_ROM["knee_angle_r"]["max"]
+    )
+
+    ankle_mobility_score = calculate_rom_score(
+        max_ankle_rom,
+        HEALTHY_ROM["ankle_angle_r"]["min"],
+        HEALTHY_ROM["ankle_angle_r"]["max"]
+    )
+
+    mobility_score = round(
+        (hip_mobility_score + knee_mobility_score + ankle_mobility_score) / 3,
+        1
     )
  
     overall_score = round(
