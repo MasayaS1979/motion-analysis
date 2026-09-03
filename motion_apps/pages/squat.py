@@ -1849,7 +1849,8 @@ with tab7:
     bottom_std = df_phase.loc[df_phase["Phase"] == "Bottom", "pelvis_list"].std()
     pelvis_stability = np.nanmean([standing_std, bottom_std])
 
-    trunk_compensation = df_phase["lumbar_extension"].abs().max()
+    standing_baseline = df_phase.loc[df_phase["Phase"] == "Standing", "lumbar_extension"].mean()
+    trunk_compensation = (df_phase["lumbar_extension"] - standing_baseline).abs().max()
 
     hip_asymmetry = asymmetry_results["Hip"]
 
