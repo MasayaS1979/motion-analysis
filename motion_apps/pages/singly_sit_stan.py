@@ -2426,7 +2426,6 @@ with tab7:
  
     pelvic_instability = (abs(pelvis_tilt_change) + abs(pelvis_list_change))
     stability_score = round(max(0, 100 - pelvic_instability * PELVIC_INSTABILITY_PENALTY_FACTOR), 1)
-
     lumbar_change = (df_phase["lumbar_extension"].max() - df_phase["lumbar_extension"].min())
     compensation_score = round(max(0, 100 - lumbar_change * LUMBAR_COMPENSATION_PENALTY_FACTOR), 1)
  
