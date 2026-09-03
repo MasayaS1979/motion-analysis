@@ -2435,7 +2435,7 @@ with tab7:
       df_phase["pelvis_tx"].max()
       -
       df_phase["pelvis_tx"].min()
-　　　)
+　　 )
  
     # Lumbar compensation = ROM of lumbar extension (max - min),
     # matching the definition given above and the KPI metric.
