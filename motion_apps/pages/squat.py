@@ -17,6 +17,11 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import Image
 from reportlab.lib.enums import TA_CENTER
 from xml.sax.saxutils import escape
+from squat_auto_comment import (
+    analyze_squat_details,
+    generate_squat_auto_comment as gen_clinical_comment,
+    generate_client_auto_comment as gen_client_comment,
+)
 pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
 pdfmetrics.registerFontFamily(
     "HeiseiKakuGo-W5",
@@ -423,6 +428,10 @@ def compare_subject_to_healthy(
 comparison_df = compare_subject_to_healthy(
     df_phase,
     healthy_rom_df
+)
+
+squat_details = analyze_squat_details(
+    df_phase, phase_summary_df, comparison_df, phase_order
 )
  
 # =========================
@@ -2254,10 +2263,8 @@ with tab8:
     if "squat_clinical_comment" not in st.session_state:
         st.session_state["squat_clinical_comment"] = ""
     if st.button(UL["auto_generate_button"]):
-        st.session_state["squat_clinical_comment"] = generate_squat_auto_comment(
-            lang_code, overall_score, asymmetry_results, comparison_df,
-            lumbar_compensation, pelvic_compensation, pelvic_rotation_rom,
-            phase_summary_df, phase_order
+        st.session_state["squat_clinical_comment"] = gen_clinical_comment(
+            lang_code, overall_score, squat_details
         )
     st.caption(UL["auto_generate_caption"])
     clinical_comment = st.text_area(
@@ -2885,9 +2892,9 @@ with tab9:
     if "client_report_comment" not in st.session_state:
         st.session_state["client_report_comment"] = ""
     if st.button(CUI["auto_generate_button"], key="client_report_auto_comment_btn"):
-        st.session_state["client_report_comment"] = generate_client_auto_comment(
-            client_lang_code, overall_score, mobility_score, stability_score, symmetry_score, compensation_score,
-            asymmetry_results, comparison_df, lumbar_compensation, pelvic_compensation, pelvic_rotation_rom
+        st.session_state["client_report_comment"] = gen_client_comment(
+            client_lang_code, overall_score, squat_details,
+            mobility_score, stability_score, symmetry_score, compensation_score
         )
     st.caption(CUI["auto_generate_caption"])
     client_comment = st.text_area(
