@@ -3529,86 +3529,13 @@ with tab9:
         tfig.tight_layout()
         return fig_to_rl_image(tfig, width_cm=16)
  
-    def generate_client_auto_comment(
-        lang_code, overall_score, mobility_score, stability_score, symmetry_score, compensation_score,
-        asymmetry_results, comparison_df, lumbar_compensation, pelvis_compensation, pelvis_rotation_rom
-    ):
-        # tab8のgenerate_sit_stand_auto_commentの平易版。専門用語を避け、対象者本人が読んでも
-        # 分かる言葉で下書きコメントを組み立てる。実測値ベースで動的に生成される。
-        asym_flags = [(joint, value) for joint, value in asymmetry_results.items() if value > 15]
- 
-        if lang_code == "ja":
-            if overall_score >= 80:
-                lines = [f"今回の総合スコアは{overall_score:.0f}/100で、とても良い状態です。"]
-            elif overall_score >= 60:
-                lines = [f"今回の総合スコアは{overall_score:.0f}/100でした。全体的には悪くありませんが、いくつか気をつけたい点があります。"]
-            else:
-                lines = [f"今回の総合スコアは{overall_score:.0f}/100でした。いくつか改善していきたいポイントが見つかりました。"]
- 
-            if mobility_score >= 80:
-                lines.append("立ち座りの動きの深さ（可動域）はしっかり出せています。")
-            else:
-                lines.append("立ち座りの動きの深さ（可動域）には、まだ伸びしろがあります。")
- 
-            if symmetry_score >= 80:
-                lines.append("左右の動きもよく揃っていました。")
-            elif asym_flags:
-                joint_text = "・".join(JOINT_SIMPLE_JA.get(j, j) for j, _ in asym_flags)
-                lines.append(f"{joint_text}を中心に、左右の動きにやや差が見られました。")
- 
-            if stability_score >= 80 and compensation_score >= 80:
-                lines.append("動作中の姿勢も安定しており、腰や骨盤への負担も少なめです。")
-            else:
-                notes = []
-                if stability_score < 80:
-                    notes.append("座る・立ち上がる間に骨盤が少し揺れやすい")
-                if compensation_score < 80:
-                    notes.append("立ち上がる際に腰や骨盤が反りやすい")
-                if notes:
-                    lines.append("、また".join(notes) + "傾向が見られました。")
- 
-            lines.append("次回までに、下のおすすめアクションを無理のない範囲で続けてみましょう。")
-            return "\n".join(lines)
-        else:
-            if overall_score >= 80:
-                lines = [f"This check scored {overall_score:.0f}/100 overall — a great result."]
-            elif overall_score >= 60:
-                lines = [f"This check scored {overall_score:.0f}/100 overall. Things look reasonably good, with a few points worth keeping an eye on."]
-            else:
-                lines = [f"This check scored {overall_score:.0f}/100 overall. A few areas stood out that are worth working on."]
- 
-            if mobility_score >= 80:
-                lines.append("Sit-to-stand depth (mobility) looks solid.")
-            else:
-                lines.append("There's room to improve sit-to-stand depth (mobility).")
- 
-            if symmetry_score >= 80:
-                lines.append("The left and right sides moved very evenly.")
-            elif asym_flags:
-                joint_text = ", ".join(j for j, _ in asym_flags)
-                lines.append(f"Some left-right difference was seen, mainly around the {joint_text}.")
- 
-            if stability_score >= 80 and compensation_score >= 80:
-                lines.append("Posture stayed steady throughout, with little strain on the lower back or pelvis.")
-            else:
-                notes = []
-                if stability_score < 80:
-                    notes.append("some pelvic wobble while sitting down and standing up")
-                if compensation_score < 80:
-                    notes.append("a tendency for the lower back/pelvis to arch while standing up")
-                if notes:
-                    lines.append("We noticed " + " and ".join(notes) + ".")
- 
-            lines.append("Try working through the recommended actions below at a comfortable pace before the next check.")
-            return "\n".join(lines)
- 
     st.markdown(f"#### {CUI['comment_heading']}")
     if "sitstand_client_report_comment" not in st.session_state:
         st.session_state["sitstand_client_report_comment"] = ""
     if st.button(CUI["auto_generate_button"], key="sitstand_client_report_auto_comment_btn"):
-        st.session_state["sitstand_client_report_comment"] = generate_client_auto_comment(
-            client_lang_code, overall_score, mobility_score, stability_score, symmetry_score, compensation_score,
-            asymmetry_results, comparison_df, lumbar_compensation, pelvis_compensation, pelvis_rotation_rom
+        st.session_state["sitstand_client_report_comment"] = gen_client_comment(
+            client_lang_code, overall_score, sit_stand_details,
+            mobility_score, stability_score, symmetry_score, compensation_score
         )
     st.caption(CUI["auto_generate_caption"])
     client_comment = st.text_area(
