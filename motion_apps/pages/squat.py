@@ -2683,6 +2683,10 @@ with tab9:
             "generate_button": "📄 クライアント向けレポートを生成",
             "download_label": "📥 クライアント向けレポートをダウンロード",
             "success_message": "クライアント向けレポートを生成しました。上のボタンからダウンロードしてください。",
+            "healthy_heading": "健常な方との比較（目立つ差）",
+            "healthy_include": "健常者との比較コメントをPDFに含める",
+            "healthy_label": "健常者との比較コメント（編集できます）",
+            "healthy_auto_button": "🪄 健常者との差からコメントを自動生成",
         },
         "en": {
             "header": "Client Report",
@@ -2697,6 +2701,11 @@ with tab9:
             "generate_button": "📄 Generate Client Report",
             "download_label": "📥 Download Client Report",
             "success_message": "Client report generated. Use the button above to download it.",
+            "success_message": "Client report generated. Use the button above to download it.",
+            "healthy_heading": "Compared with Healthy Reference (Notable Differences)",
+            "healthy_include": "Include healthy-reference comparison in the PDF",
+            "healthy_label": "Healthy-reference comment (editable)",
+            "healthy_auto_button": "🪄 Auto-generate from healthy-reference differences",
         },
     }
     CUI = CLIENT_UI[client_lang_code]
@@ -2735,6 +2744,70 @@ with tab9:
         },
     }
     JOINT_SIMPLE_JA = {"Hip": "股関節", "Knee": "ひざ", "Ankle": "足首"}
+
+    HEALTHY_COL_CANDIDATES = {
+        "min": ["Healthy_Min", "Normal_Min", "Ref_Min", "Reference_Min", "Healthy_ROM_Min"],
+        "max": ["Healthy_Max", "Normal_Max", "Ref_Max", "Reference_Max", "Healthy_ROM_Max"],
+    }
+
+    def _find_col(df, candidates):
+        for c in candidates:
+            if c in df.columns:
+                return c
+        return None
+
+    def build_healthy_diff_items(comparison_df, top_n=3, min_diff=3.0):
+        """健常範囲から外れた項目を、差が大きい順に最大 top_n 件返す"""
+        min_col = _find_col(comparison_df, HEALTHY_COL_CANDIDATES["min"])
+        max_col = _find_col(comparison_df, HEALTHY_COL_CANDIDATES["max"])
+        if min_col is None or max_col is None:
+            return []
+        items = []
+        for _, row in comparison_df.iterrows():
+            val, lo, hi = row["Subject_ROM"], row[min_col], row[max_col]
+            if pd.isna(val) or pd.isna(lo) or pd.isna(hi):
+                continue
+            if val < lo:
+                diff, direction = lo - val, "low"
+            elif val > hi:
+                diff, direction = val - hi, "high"
+            else:
+                continue
+            if diff < min_diff:          # 数度程度の小さな差は「顕著」とみなさない
+                continue
+            width = max(hi - lo, 1.0)    # 範囲の広さで割って、関節間で比較できるようにする
+            items.append({"var": row["Variable"], "value": val, "lo": lo, "hi": hi,
+                          "diff": diff, "direction": direction, "rel": diff / width})
+        items.sort(key=lambda d: d["rel"], reverse=True)
+        return items[:top_n]
+
+    def generate_healthy_diff_comment(items, lang_code):
+        JL = JOINT_LABEL[lang_code]
+        if not items:
+            return ("健常な方の目安と比べて、大きな差は見られませんでした。"
+                    if lang_code == "ja" else
+                    "No notable differences from the healthy reference range were found.")
+        if lang_code == "ja":
+            lines = ["健常な方の目安と比べて、特に差が大きかったのは次の点です。"]
+            for it in items:
+                name = JL.get(it["var"], it["var"])
+                base = f"・{name}：{it['value']:.1f}°（目安 {it['lo']:.0f}〜{it['hi']:.0f}°）"
+                if it["direction"] == "low":
+                    lines.append(base + f"で、目安より約{it['diff']:.0f}°小さめでした。動きが硬くなっている可能性があります。")
+                else:
+                    lines.append(base + f"で、目安より約{it['diff']:.0f}°大きめでした。動きすぎ、または他の部位をかばっている可能性があります。")
+            lines.append("これらのポイントを中心に、次回までのエクササイズを進めていきましょう。")
+        else:
+            lines = ["Compared with the healthy reference, the biggest differences were:"]
+            for it in items:
+                name = JL.get(it["var"], it["var"])
+                base = f"- {name}: {it['value']:.1f}° (reference {it['lo']:.0f}–{it['hi']:.0f}°)"
+                if it["direction"] == "low":
+                    lines.append(base + f", about {it['diff']:.0f}° below the reference. This may indicate some stiffness.")
+                else:
+                    lines.append(base + f", about {it['diff']:.0f}° above the reference. This may indicate excess motion or compensation.")
+            lines.append("We'll focus the exercises on these points before the next check.")
+        return "\n".join(lines)
  
     def client_tier(score, lang_code):
         if score >= 80:
@@ -2901,6 +2974,19 @@ with tab9:
         CUI["comment_label"],
         key="client_report_comment",
         height=150
+    )
+
+    st.markdown(f"#### {CUI['healthy_heading']}")
+    include_healthy_diff = st.checkbox(CUI["healthy_include"], value=True, key="client_include_healthy_diff")
+    if "client_healthy_diff_comment" not in st.session_state:
+        st.session_state["client_healthy_diff_comment"] = ""
+    if st.button(CUI["healthy_auto_button"], key="client_healthy_diff_auto_btn", disabled=not include_healthy_diff):
+        st.session_state["client_healthy_diff_comment"] = generate_healthy_diff_comment(
+            build_healthy_diff_items(comparison_df), client_lang_code
+        )
+    healthy_diff_comment = st.text_area(
+        CUI["healthy_label"], key="client_healthy_diff_comment",
+        height=130, disabled=not include_healthy_diff
     )
  
     if st.button(CUI["generate_button"], key="client_report_generate_btn"):
@@ -3260,6 +3346,46 @@ with tab9:
         comment_html = escape(comment_display).replace("\n", "<br/>")
         elements_c.append(Paragraph(comment_html, c_body_style))
         elements_c.append(Spacer(1, 0.16 * cm))
+
+        if include_healthy_diff:
+            healthy_items = build_healthy_diff_items(comparison_df)
+            elements_c.append(Paragraph(CUI["healthy_heading"], c_section_style))
+
+            if healthy_items:
+                hdr = (["項目", "あなた", "健常な目安", "差"] if client_lang_code == "ja"
+                       else ["Item", "You", "Reference", "Diff"])
+                h_rows = [hdr]
+                range_sep = "〜" if client_lang_code == "ja" else "–"
+                for it in healthy_items:
+                    sign = "-" if it["direction"] == "low" else "+"
+                    h_rows.append([
+                        JOINT_LABEL[client_lang_code].get(it["var"], it["var"]),
+                        f"{it['value']:.1f}°",
+                        f"{it['lo']:.0f}{range_sep}{it['hi']:.0f}°",
+                        f"{sign}{it['diff']:.1f}°",
+                    ])
+                h_table = Table(h_rows, colWidths=[6 * cm, 3.5 * cm, 5 * cm, 4.5 * cm])
+                h_table.setStyle(TableStyle([
+                    ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#78909C")),
+                    ("TEXTCOLOR", (0, 1), (-2, -1), colors.HexColor("#263238")),
+                    ("TEXTCOLOR", (-1, 1), (-1, -1), colors.HexColor("#C62828")),
+                    ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor(LINE_HEX_C)),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ]))
+                elements_c.append(h_table)
+                elements_c.append(Spacer(1, 0.12 * cm))
+
+            # 手入力が空なら自動文を使う
+            h_text = (healthy_diff_comment.strip() if healthy_diff_comment and healthy_diff_comment.strip()
+                      else generate_healthy_diff_comment(healthy_items, client_lang_code))
+            elements_c.append(Paragraph(escape(h_text).replace("\n", "<br/>"), c_body_style))
+            elements_c.append(Spacer(1, 0.16 * cm))
  
         elements_c.append(Paragraph(
             "おすすめのアクション（今週から）" if client_lang_code == "ja" else "Recommended Actions (Starting This Week)",
