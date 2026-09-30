@@ -17,6 +17,12 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import Image
 from reportlab.lib.enums import TA_CENTER
 from xml.sax.saxutils import escape
+from gait_auto_comment import (
+    analyze_gait_details,
+    generate_gait_auto_comment as gen_clinical_comment,
+    generate_client_auto_comment as gen_client_comment,
+)
+
 pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
 pdfmetrics.registerFontFamily(
     "HeiseiKakuGo-W5",
@@ -392,6 +398,10 @@ def compare_gait_to_healthy(df):
     return pd.DataFrame(results)
  
 comparison_df = compare_gait_to_healthy(df_phase)
+
+gait_details = analyze_gait_details(
+    df_phase, phase_summary_df, comparison_df, phase_order
+)
  
 # =========================
 # Phase Weighted Symmetry
@@ -2825,13 +2835,13 @@ with tab8:
 # =========================
 # Client Report
 # =========================
-with tab9:
+ith tab9:
  
     client_lang_choice = st.radio(
         "レポート言語 / Report Language",
         ["日本語", "English"],
         horizontal=True,
-        key="client_lang_radio"
+        key="gait_client_lang_radio"
     )
     client_lang_code = "ja" if client_lang_choice == "日本語" else "en"
  
@@ -2849,6 +2859,10 @@ with tab9:
             "generate_button": "📄 クライアント向けレポートを生成",
             "download_label": "📥 クライアント向けレポートをダウンロード",
             "success_message": "クライアント向けレポートを生成しました。上のボタンからダウンロードしてください。",
+            "healthy_heading": "正常範囲との比較（目立つ差）",
+            "healthy_include": "正常範囲との比較コメントをPDFに含める",
+            "healthy_label": "正常範囲との比較コメント（編集できます）",
+            "healthy_auto_button": "🪄 正常範囲との差からコメントを自動生成",
         },
         "en": {
             "header": "Client Report",
@@ -2863,6 +2877,10 @@ with tab9:
             "generate_button": "📄 Generate Client Report",
             "download_label": "📥 Download Client Report",
             "success_message": "Client report generated. Use the button above to download it.",
+            "healthy_heading": "Compared with Normal Range (Notable Differences)",
+            "healthy_include": "Include normal-range comparison in the PDF",
+            "healthy_label": "Normal-range comment (editable)",
+            "healthy_auto_button": "🪄 Auto-generate from normal-range differences",
         },
     }
     CUI = CLIENT_UI[client_lang_code]
@@ -2873,15 +2891,15 @@ with tab9:
     client_col1, client_col2, client_col3 = st.columns(3)
     with client_col1:
         client_subject_name = st.text_input(
-            CUI["subject_name"], value="", key="client_subject_name_input"
+            CUI["subject_name"], value="", key="gait_client_subject_name_input"
         )
     with client_col2:
         client_exam_date = st.text_input(
-            CUI["exam_date"], value="", key="client_exam_date_input"
+            CUI["exam_date"], value="", key="gait_client_exam_date_input"
         )
     with client_col3:
         client_examiner_name = st.text_input(
-            CUI["examiner"], value="", key="client_examiner_name_input"
+            CUI["examiner"], value="", key="gait_client_examiner_name_input"
         )
  
     JOINT_LABEL = {
@@ -2903,6 +2921,72 @@ with tab9:
         },
     }
     JOINT_SIMPLE_JA = {"Hip": "股関節", "Knee": "ひざ", "Ankle": "足首"}
+ 
+    # 腰の反り・骨盤の傾き／回旋は「動きが少ないほど良い」代償の指標なので、
+    # 正常範囲の可動域より小さくても問題として扱わない。
+    COMPENSATION_VARS_C = {"lumbar_extension", "pelvis_tilt", "pelvis_rotation", "pelvis_list"}
+    ROM_DIFF_PCT_C = 20.0  # アプリの Status（Abnormal）判定と同じ基準
+ 
+    def _ref_rom(row):
+        if "Healthy_ROM" in row.index and pd.notna(row["Healthy_ROM"]):
+            return float(row["Healthy_ROM"])
+        return float(row["Healthy_Max"] - row["Healthy_Min"])
+ 
+    def _is_concern_row(row):
+        if row["Status"] != "Abnormal":
+            return False
+        if row["Variable"] in COMPENSATION_VARS_C and row["Subject_ROM"] < _ref_rom(row):
+            return False
+        return True
+ 
+    def build_healthy_diff_items(comparison_df, top_n=3, min_diff=3.0):
+        """正常範囲の可動域から ±20% 以上外れた項目を、差が大きい順に最大 top_n 件返す"""
+        items = []
+        for _, row in comparison_df.iterrows():
+            val, ref = row["Subject_ROM"], _ref_rom(row)
+            if pd.isna(val) or pd.isna(ref) or ref == 0:
+                continue
+            pct = (val - ref) / ref * 100
+            if abs(pct) <= ROM_DIFF_PCT_C:
+                continue
+            direction = "low" if val < ref else "high"
+            if direction == "low" and row["Variable"] in COMPENSATION_VARS_C:
+                continue
+            diff = abs(val - ref)
+            if diff < min_diff:
+                continue
+            items.append({"var": row["Variable"], "value": val, "ref": ref,
+                          "diff": diff, "direction": direction, "rel": abs(pct)})
+        items.sort(key=lambda d: d["rel"], reverse=True)
+        return items[:top_n]
+ 
+    def generate_healthy_diff_comment(items, lang_code):
+        JL = JOINT_LABEL[lang_code]
+        if not items:
+            return ("正常範囲と比べて、大きな差は見られませんでした。"
+                    if lang_code == "ja" else
+                    "No notable differences from the normal range were found.")
+        if lang_code == "ja":
+            lines = ["正常範囲と比べて、特に差が大きかったのは次の点です。"]
+            for it in items:
+                name = JL.get(it["var"], it["var"])
+                base = f"・{name}：動いた範囲 {it['value']:.1f}°（正常範囲の目安 {it['ref']:.0f}°）"
+                if it["direction"] == "low":
+                    lines.append(base + f"で、目安より約{it['diff']:.0f}°小さめでした。歩くときの動きが小さくなっている可能性があります。")
+                else:
+                    lines.append(base + f"で、目安より約{it['diff']:.0f}°大きめでした。動きすぎ、または他の部位をかばっている可能性があります。")
+            lines.append("これらのポイントを中心に、次回までのエクササイズを進めていきましょう。")
+        else:
+            lines = ["Compared with the normal range, the biggest differences were:"]
+            for it in items:
+                name = JL.get(it["var"], it["var"])
+                base = f"- {name}: range {it['value']:.1f}° (normal about {it['ref']:.0f}°)"
+                if it["direction"] == "low":
+                    lines.append(base + f", about {it['diff']:.0f}° smaller. The movement may be reduced while walking.")
+                else:
+                    lines.append(base + f", about {it['diff']:.0f}° larger. This may indicate excess motion or compensation.")
+            lines.append("We'll focus the exercises on these points before the next check.")
+        return "\n".join(lines)
  
     def client_tier(score, lang_code):
         if score >= 80:
@@ -2983,114 +3067,42 @@ with tab9:
         tfig.tight_layout()
         return fig_to_rl_image(tfig, width_cm=16)
  
-    def generate_client_auto_comment(
-        lang_code, overall_score, mobility_score, symmetry_score, cadence_score, pelvic_ml_score, lumbar_extension_score,
-        gait_asymmetry_results, comparison_df, cadence, lumbar_extension_rom, pelvis_tilt_rom, pelvis_rotation_rom, pelvic_obliquity_rom
-    ):
-        # tab8のgenerate_gait_auto_commentの平易版。専門用語を避け、対象者本人が読んでも
-        # 分かる言葉で下書きコメントを組み立てる。実測値ベースで動的に生成される。
-        asym_flags = [(joint, value) for joint, value in gait_asymmetry_results.items() if value > 15]
- 
-        if lang_code == "ja":
-            if overall_score >= 80:
-                lines = [f"今回の総合スコアは{overall_score:.0f}/100で、とても良い歩行状態です。"]
-            elif overall_score >= 60:
-                lines = [f"今回の総合スコアは{overall_score:.0f}/100でした。全体的には悪くありませんが、いくつか気をつけたい点があります。"]
-            else:
-                lines = [f"今回の総合スコアは{overall_score:.0f}/100でした。いくつか改善していきたいポイントが見つかりました。"]
- 
-            if mobility_score >= 80:
-                lines.append("股関節・ひざ・足首の動きの大きさ（可動域）はしっかり出せています。")
-            else:
-                lines.append("股関節・ひざ・足首の動きの大きさ（可動域）には、まだ伸びしろがあります。")
- 
-            if symmetry_score >= 80:
-                lines.append("左右の動きもよく揃っていました。")
-            elif asym_flags:
-                joint_text = "・".join(JOINT_SIMPLE_JA.get(j, j) for j, _ in asym_flags)
-                lines.append(f"{joint_text}を中心に、左右の動きにやや差が見られました。")
- 
-            if cadence_score >= 80:
-                lines.append(f"歩くペース（ケイデンス {cadence:.0f}歩/分）も安定した範囲でした。")
-            elif cadence < 90:
-                lines.append(f"歩くペース（ケイデンス {cadence:.0f}歩/分）は、やや ゆっくりめでした。")
-            elif cadence > 130:
-                lines.append(f"歩くペース（ケイデンス {cadence:.0f}歩/分）は、やや速めでした。")
- 
-            if pelvic_ml_score >= 80 and lumbar_extension_score >= 80:
-                lines.append("歩行中の姿勢も安定しており、骨盤や腰への負担も少なめです。")
-            else:
-                notes = []
-                if pelvic_ml_score < 80:
-                    notes.append("歩行中に骨盤が左右にやや揺れやすい")
-                if lumbar_extension_score < 80:
-                    notes.append("歩く際に腰が反りやすい")
-                if notes:
-                    lines.append("、また".join(notes) + "傾向が見られました。")
- 
-            lines.append("次回までに、下のおすすめアクションを無理のない範囲で続けてみましょう。")
-            return "\n".join(lines)
-        else:
-            if overall_score >= 80:
-                lines = [f"This check scored {overall_score:.0f}/100 overall — a great gait result."]
-            elif overall_score >= 60:
-                lines = [f"This check scored {overall_score:.0f}/100 overall. Things look reasonably good, with a few points worth keeping an eye on."]
-            else:
-                lines = [f"This check scored {overall_score:.0f}/100 overall. A few areas stood out that are worth working on."]
- 
-            if mobility_score >= 80:
-                lines.append("Hip, knee, and ankle motion (mobility) looks solid.")
-            else:
-                lines.append("There's room to improve hip, knee, and ankle motion (mobility).")
- 
-            if symmetry_score >= 80:
-                lines.append("The left and right sides moved very evenly.")
-            elif asym_flags:
-                joint_text = ", ".join(j for j, _ in asym_flags)
-                lines.append(f"Some left-right difference was seen, mainly around the {joint_text}.")
- 
-            if cadence_score >= 80:
-                lines.append(f"Walking pace (cadence {cadence:.0f} steps/min) was within a steady range.")
-            elif cadence < 90:
-                lines.append(f"Walking pace (cadence {cadence:.0f} steps/min) was a bit slow.")
-            elif cadence > 130:
-                lines.append(f"Walking pace (cadence {cadence:.0f} steps/min) was a bit fast.")
- 
-            if pelvic_ml_score >= 80 and lumbar_extension_score >= 80:
-                lines.append("Posture stayed steady while walking, with little strain on the pelvis or lower back.")
-            else:
-                notes = []
-                if pelvic_ml_score < 80:
-                    notes.append("some side-to-side pelvic wobble while walking")
-                if lumbar_extension_score < 80:
-                    notes.append("a tendency for the lower back to arch while walking")
-                if notes:
-                    lines.append("We noticed " + " and ".join(notes) + ".")
- 
-            lines.append("Try working through the recommended actions below at a comfortable pace before the next check.")
-            return "\n".join(lines)
- 
     st.markdown(f"#### {CUI['comment_heading']}")
-    if "client_report_comment" not in st.session_state:
-        st.session_state["client_report_comment"] = ""
-    if st.button(CUI["auto_generate_button"], key="client_report_auto_comment_btn"):
-        st.session_state["client_report_comment"] = generate_client_auto_comment(
-            client_lang_code, overall_score, mobility_score, symmetry_score, cadence_score, pelvic_ml_score, lumbar_extension_score,
-            gait_asymmetry_results, comparison_df, cadence, lumbar_extension_rom, pelvis_tilt_rom, pelvis_rotation_rom, pelvic_obliquity_rom
+    if "gait_client_report_comment" not in st.session_state:
+        st.session_state["gait_client_report_comment"] = ""
+    if st.button(CUI["auto_generate_button"], key="gait_client_report_auto_comment_btn"):
+        st.session_state["gait_client_report_comment"] = gen_client_comment(
+            client_lang_code, overall_score, gait_details,
+            mobility_score, symmetry_score, cadence_score, pelvic_ml_score, lumbar_extension_score,
+            cadence=cadence
         )
     st.caption(CUI["auto_generate_caption"])
     client_comment = st.text_area(
         CUI["comment_label"],
-        key="client_report_comment",
+        key="gait_client_report_comment",
         height=150
     )
  
-    if st.button(CUI["generate_button"], key="client_report_generate_btn"):
+    st.markdown(f"#### {CUI['healthy_heading']}")
+    include_healthy_diff = st.checkbox(CUI["healthy_include"], value=True, key="gait_client_include_healthy_diff")
+    if "gait_client_healthy_diff_comment" not in st.session_state:
+        st.session_state["gait_client_healthy_diff_comment"] = ""
+    if st.button(CUI["healthy_auto_button"], key="gait_client_healthy_diff_auto_btn", disabled=not include_healthy_diff):
+        st.session_state["gait_client_healthy_diff_comment"] = generate_healthy_diff_comment(
+            build_healthy_diff_items(comparison_df), client_lang_code
+        )
+    healthy_diff_comment = st.text_area(
+        CUI["healthy_label"], key="gait_client_healthy_diff_comment",
+        height=130, disabled=not include_healthy_diff
+    )
+ 
+    if st.button(CUI["generate_button"], key="gait_client_report_generate_btn"):
  
         from reportlab.platypus import HRFlowable
  
         # ---- 動的な所見の収集（実測値ベース） ----
-        abnormal_rows = comparison_df[comparison_df["Status"] == "Abnormal"]
+        # 代償の指標（腰・骨盤）が正常範囲より小さい場合は問題にしない
+        abnormal_rows = comparison_df[comparison_df.apply(_is_concern_row, axis=1)] if len(comparison_df) else comparison_df
         asym_flags = [(joint, value) for joint, value in gait_asymmetry_results.items() if value > 15]
  
         concern_flags = {
@@ -3155,14 +3167,14 @@ with tab9:
                 range_text = "・".join(JL.get(v, v) for v in abnormal_rows["Variable"].tolist())
                 concern_items.append((
                     "可動域が基準の範囲外",
-                    f"{range_text}が、一般的な健常範囲の外にありました。可動域の制限、"
+                    f"{range_text}が、一般的な正常範囲の外にありました。可動域の制限、"
                     "またはやや動きすぎている可能性があります。"
                 ))
             else:
                 range_text = ", ".join(JOINT_LABEL["en"].get(v, v) for v in abnormal_rows["Variable"].tolist())
                 concern_items.append((
                     "Range of motion outside reference",
-                    f"{range_text} fell outside the typical healthy range, suggesting possible "
+                    f"{range_text} fell outside the typical normal range, suggesting possible "
                     "restricted or excessive range of motion."
                 ))
         if concern_flags["stability"]:
@@ -3248,7 +3260,7 @@ with tab9:
  
         # ---- フェーズ別の一言メモ（実測値ベース） ----
         # 歩行にはSquat/Sit-Standのような「静止保持局面」が無いため、
-        # tab8のvariability_flagsと同様に全フェーズを対象にばらつきを評価する。
+        # 全フェーズを対象にばらつきを評価する。
         STD_THRESHOLD_C = 2.0
         phase_std_flag = {p: False for p in phase_order}
         for variable in ["pelvis_tilt", "pelvis_rotation", "lumbar_extension", "pelvis_list"]:
@@ -3493,6 +3505,44 @@ with tab9:
         elements_c.append(Paragraph(comment_html, c_body_style))
         elements_c.append(Spacer(1, 0.16 * cm))
  
+        if include_healthy_diff:
+            healthy_items = build_healthy_diff_items(comparison_df)
+            elements_c.append(Paragraph(CUI["healthy_heading"], c_section_style))
+ 
+            if healthy_items:
+                hdr = (["項目", "あなた（動いた範囲）", "正常範囲の目安", "差"] if client_lang_code == "ja"
+                       else ["Item", "You (range)", "Normal Range", "Diff"])
+                h_rows = [hdr]
+                for it in healthy_items:
+                    sign = "-" if it["direction"] == "low" else "+"
+                    h_rows.append([
+                        JOINT_LABEL[client_lang_code].get(it["var"], it["var"]),
+                        f"{it['value']:.1f}°",
+                        f"{it['ref']:.0f}°",
+                        f"{sign}{it['diff']:.1f}°",
+                    ])
+                h_table = Table(h_rows, colWidths=[6 * cm, 4 * cm, 4.5 * cm, 4.5 * cm])
+                h_table.setStyle(TableStyle([
+                    ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#78909C")),
+                    ("TEXTCOLOR", (0, 1), (-2, -1), colors.HexColor("#263238")),
+                    ("TEXTCOLOR", (-1, 1), (-1, -1), colors.HexColor("#C62828")),
+                    ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor(LINE_HEX_C)),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ]))
+                elements_c.append(h_table)
+                elements_c.append(Spacer(1, 0.12 * cm))
+ 
+            h_text = (healthy_diff_comment.strip() if healthy_diff_comment and healthy_diff_comment.strip()
+                      else generate_healthy_diff_comment(healthy_items, client_lang_code))
+            elements_c.append(Paragraph(escape(h_text).replace("\n", "<br/>"), c_body_style))
+            elements_c.append(Spacer(1, 0.16 * cm))
+ 
         elements_c.append(Paragraph(
             "おすすめのアクション（今週から）" if client_lang_code == "ja" else "Recommended Actions (Starting This Week)",
             c_section_style
@@ -3537,8 +3587,8 @@ with tab9:
                 return "-"
             is_abnormal = row["Status"].iloc[0] == "Abnormal"
             if client_lang_code == "ja":
-                return "基準範囲外" if is_abnormal else "健康な範囲内"
-            return "Outside reference" if is_abnormal else "Within reference"
+                return "正常範囲外" if is_abnormal else "正常範囲内"
+            return "Outside normal range" if is_abnormal else "Within normal range"
  
         for var in ["hip_flexion_r", "knee_angle_r", "ankle_angle_r"]:
             row = comparison_df[comparison_df["Variable"] == var]
@@ -3650,7 +3700,7 @@ with tab9:
             data=client_report_buffer.getvalue(),
             file_name="Gait_Client_Report.pdf",
             mime="application/pdf",
-            key="client_report_download_btn"
+            key="gait_client_report_download_btn"
         )
         st.success(CUI["success_message"])
  
