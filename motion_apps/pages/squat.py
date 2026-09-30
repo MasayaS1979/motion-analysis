@@ -2683,10 +2683,10 @@ with tab9:
             "generate_button": "📄 クライアント向けレポートを生成",
             "download_label": "📥 クライアント向けレポートをダウンロード",
             "success_message": "クライアント向けレポートを生成しました。上のボタンからダウンロードしてください。",
-            "healthy_heading": "健常な方との比較（目立つ差）",
-            "healthy_include": "健常者との比較コメントをPDFに含める",
-            "healthy_label": "健常者との比較コメント（編集できます）",
-            "healthy_auto_button": "🪄 健常者との差からコメントを自動生成",
+            "healthy_heading": "正常範囲との比較（目立つ差）",
+            "healthy_include": "正常範囲との比較コメントをPDFに含める",
+            "healthy_label": "正常範囲との比較コメント（編集できます）",
+            "healthy_auto_button": "🪄 正常範囲との差からコメントを自動生成",
         },
         "en": {
             "header": "Client Report",
@@ -2784,18 +2784,18 @@ with tab9:
     def generate_healthy_diff_comment(items, lang_code):
         JL = JOINT_LABEL[lang_code]
         if not items:
-            return ("健常な方の目安と比べて、大きな差は見られませんでした。"
+            return ("正常範囲と比べて、大きな差は見られませんでした。"
                     if lang_code == "ja" else
                     "No notable differences from the healthy reference range were found.")
         if lang_code == "ja":
-            lines = ["健常な方の目安と比べて、特に差が大きかったのは次の点です。"]
+            lines = ["正常範囲と比べて、特に差が大きかったのは次の点です。"]
             for it in items:
                 name = JL.get(it["var"], it["var"])
-                base = f"・{name}：{it['value']:.1f}°（目安 {it['lo']:.0f}〜{it['hi']:.0f}°）"
+                base = f"・{name}：{it['value']:.1f}°（正常範囲 {it['lo']:.0f}〜{it['hi']:.0f}°）"
                 if it["direction"] == "low":
-                    lines.append(base + f"で、目安より約{it['diff']:.0f}°小さめでした。動きが硬くなっている可能性があります。")
+                    lines.append(base + f"で、正常範囲より約{it['diff']:.0f}°小さめでした。動きが硬くなっている可能性があります。")
                 else:
-                    lines.append(base + f"で、目安より約{it['diff']:.0f}°大きめでした。動きすぎ、または他の部位をかばっている可能性があります。")
+                    lines.append(base + f"で、正常範囲より約{it['diff']:.0f}°大きめでした。動きすぎ、または他の部位をかばっている可能性があります。")
             lines.append("これらのポイントを中心に、次回までのエクササイズを進めていきましょう。")
         else:
             lines = ["Compared with the healthy reference, the biggest differences were:"]
@@ -3043,7 +3043,7 @@ with tab9:
                 range_text = "・".join(JL.get(v, v) for v in out_of_range_rows["Variable"].tolist())
                 concern_items.append((
                     "可動域が基準の範囲外",
-                    f"{range_text}が、一般的な健常範囲の外にありました。可動域の制限、"
+                    f"{range_text}が、一般的な正常範囲の外にありました。可動域の制限、"
                     "またはやや動きすぎている可能性があります。"
                 ))
             else:
@@ -3352,7 +3352,7 @@ with tab9:
             elements_c.append(Paragraph(CUI["healthy_heading"], c_section_style))
 
             if healthy_items:
-                hdr = (["項目", "あなた", "健常な目安", "差"] if client_lang_code == "ja"
+                hdr = (["項目", "あなた", "正常範囲", "差"] if client_lang_code == "ja"
                        else ["Item", "You", "Reference", "Diff"])
                 h_rows = [hdr]
                 range_sep = "〜" if client_lang_code == "ja" else "–"
@@ -3431,7 +3431,7 @@ with tab9:
                 return "-"
             out = bool(row["Out_of_Range"].iloc[0])
             if client_lang_code == "ja":
-                return "基準範囲外" if out else "健康な範囲内"
+                return "正常範囲外" if out else "正常範囲内"
             return "Outside reference" if out else "Within reference"
  
         for var in ["hip_flexion_r", "knee_angle_r", "ankle_angle_r"]:
