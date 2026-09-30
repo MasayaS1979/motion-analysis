@@ -355,6 +355,10 @@ comparison_df = compare_subject_to_healthy(
     df_phase,
     healthy_rom_df
 )
+
+arm_flexion_details = analyze_arm_flexion_details(
+    df_phase, phase_summary_df, comparison_df, phase_order
+)
  
 # =========================
 # Tabs
