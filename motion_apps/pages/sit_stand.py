@@ -3340,6 +3340,10 @@ with tab9:
             "generate_button": "📄 クライアント向けレポートを生成",
             "download_label": "📥 クライアント向けレポートをダウンロード",
             "success_message": "クライアント向けレポートを生成しました。上のボタンからダウンロードしてください。",
+            "healthy_heading": "正常範囲との比較（目立つ差）",
+            "healthy_include": "正常範囲との比較コメントをPDFに含める",
+            "healthy_label": "正常範囲との比較コメント（編集できます）",
+            "healthy_auto_button": "🪄 正常範囲との差からコメントを自動生成",
         },
         "en": {
             "header": "Client Report",
@@ -3354,6 +3358,10 @@ with tab9:
             "generate_button": "📄 Generate Client Report",
             "download_label": "📥 Download Client Report",
             "success_message": "Client report generated. Use the button above to download it.",
+            "healthy_heading": "Compared with Normal Range (Notable Differences)",
+            "healthy_include": "Include normal-range comparison in the PDF",
+            "healthy_label": "Normal-range comment (editable)",
+            "healthy_auto_button": "🪄 Auto-generate from normal-range differences",
         },
     }
     CUI = CLIENT_UI[client_lang_code]
@@ -3392,6 +3400,55 @@ with tab9:
         },
     }
     JOINT_SIMPLE_JA = {"Hip": "股関節", "Knee": "ひざ", "Ankle": "足首"}
+
+    def build_healthy_diff_items(comparison_df, top_n=3, min_diff=3.0):
+        """正常範囲から外れた項目を、差が大きい順に最大 top_n 件返す"""
+        items = []
+        for _, row in comparison_df.iterrows():
+            val, lo, hi = row["Subject_ROM"], row["Healthy_Min"], row["Healthy_Max"]
+            if pd.isna(val) or pd.isna(lo) or pd.isna(hi):
+                continue
+            if val < lo:
+                diff, direction = lo - val, "low"
+            elif val > hi:
+                diff, direction = val - hi, "high"
+            else:
+                continue
+            if diff < min_diff:
+                continue
+            width = max(hi - lo, 1.0)
+            items.append({"var": row["Variable"], "value": val, "lo": lo, "hi": hi,
+                          "diff": diff, "direction": direction, "rel": diff / width})
+        items.sort(key=lambda d: d["rel"], reverse=True)
+        return items[:top_n]
+
+    def generate_healthy_diff_comment(items, lang_code):
+        JL = JOINT_LABEL[lang_code]
+        if not items:
+            return ("正常範囲と比べて、大きな差は見られませんでした。"
+                    if lang_code == "ja" else
+                    "No notable differences from the normal range were found.")
+        if lang_code == "ja":
+            lines = ["正常範囲と比べて、特に差が大きかったのは次の点です。"]
+            for it in items:
+                name = JL.get(it["var"], it["var"])
+                base = f"・{name}：{it['value']:.1f}°（正常範囲 {it['lo']:.0f}〜{it['hi']:.0f}°）"
+                if it["direction"] == "low":
+                    lines.append(base + f"で、正常範囲より約{it['diff']:.0f}°小さめでした。動きが硬くなっている可能性があります。")
+                else:
+                    lines.append(base + f"で、正常範囲より約{it['diff']:.0f}°大きめでした。動きすぎ、または他の部位をかばっている可能性があります。")
+            lines.append("これらのポイントを中心に、次回までのエクササイズを進めていきましょう。")
+        else:
+            lines = ["Compared with the normal range, the biggest differences were:"]
+            for it in items:
+                name = JL.get(it["var"], it["var"])
+                base = f"- {name}: {it['value']:.1f}° (normal range {it['lo']:.0f}–{it['hi']:.0f}°)"
+                if it["direction"] == "low":
+                    lines.append(base + f", about {it['diff']:.0f}° below the normal range. This may indicate some stiffness.")
+                else:
+                    lines.append(base + f", about {it['diff']:.0f}° above the normal range. This may indicate excess motion or compensation.")
+            lines.append("We'll focus the exercises on these points before the next check.")
+        return "\n".join(lines)
  
     def client_tier(score, lang_code):
         if score >= 80:
@@ -3559,6 +3616,19 @@ with tab9:
         key="client_report_comment",
         height=150
     )
+
+    st.markdown(f"#### {CUI['healthy_heading']}")
+    include_healthy_diff = st.checkbox(CUI["healthy_include"], value=True, key="client_include_healthy_diff")
+    if "client_healthy_diff_comment" not in st.session_state:
+        st.session_state["client_healthy_diff_comment"] = ""
+    if st.button(CUI["healthy_auto_button"], key="client_healthy_diff_auto_btn", disabled=not include_healthy_diff):
+        st.session_state["client_healthy_diff_comment"] = generate_healthy_diff_comment(
+            build_healthy_diff_items(comparison_df), client_lang_code
+        )
+    healthy_diff_comment = st.text_area(
+        CUI["healthy_label"], key="client_healthy_diff_comment",
+        height=130, disabled=not include_healthy_diff
+    )
  
     if st.button(CUI["generate_button"], key="client_report_generate_btn"):
  
@@ -3614,7 +3684,7 @@ with tab9:
                 range_text = "・".join(JL.get(v, v) for v in out_of_range_rows["Variable"].tolist())
                 concern_items.append((
                     "可動域が基準の範囲外",
-                    f"{range_text}が、一般的な健常範囲の外にありました。可動域の制限、"
+                    f"{range_text}が、一般的な正常範囲の外にありました。可動域の制限、"
                     "またはやや動きすぎている可能性があります。"
                 ))
             else:
@@ -3918,6 +3988,45 @@ with tab9:
         comment_html = escape(comment_display).replace("\n", "<br/>")
         elements_c.append(Paragraph(comment_html, c_body_style))
         elements_c.append(Spacer(1, 0.16 * cm))
+
+        if include_healthy_diff:
+            healthy_items = build_healthy_diff_items(comparison_df)
+            elements_c.append(Paragraph(CUI["healthy_heading"], c_section_style))
+
+            if healthy_items:
+                hdr = (["項目", "あなた", "正常範囲", "差"] if client_lang_code == "ja"
+                       else ["Item", "You", "Normal Range", "Diff"])
+                h_rows = [hdr]
+                range_sep = "〜" if client_lang_code == "ja" else "–"
+                for it in healthy_items:
+                    sign = "-" if it["direction"] == "low" else "+"
+                    h_rows.append([
+                        JOINT_LABEL[client_lang_code].get(it["var"], it["var"]),
+                        f"{it['value']:.1f}°",
+                        f"{it['lo']:.0f}{range_sep}{it['hi']:.0f}°",
+                        f"{sign}{it['diff']:.1f}°",
+                    ])
+                h_table = Table(h_rows, colWidths=[6 * cm, 3.5 * cm, 5 * cm, 4.5 * cm])
+                h_table.setStyle(TableStyle([
+                    ("FONTNAME", (0, 0), (-1, -1), "HeiseiKakuGo-W5"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#78909C")),
+                    ("TEXTCOLOR", (0, 1), (-2, -1), colors.HexColor("#263238")),
+                    ("TEXTCOLOR", (-1, 1), (-1, -1), colors.HexColor("#C62828")),
+                    ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor(LINE_HEX_C)),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ]))
+                elements_c.append(h_table)
+                elements_c.append(Spacer(1, 0.12 * cm))
+
+            h_text = (healthy_diff_comment.strip() if healthy_diff_comment and healthy_diff_comment.strip()
+                      else generate_healthy_diff_comment(healthy_items, client_lang_code))
+            elements_c.append(Paragraph(escape(h_text).replace("\n", "<br/>"), c_body_style))
+            elements_c.append(Spacer(1, 0.16 * cm))
  
         elements_c.append(Paragraph(
             "おすすめのアクション（今週から）" if client_lang_code == "ja" else "Recommended Actions (Starting This Week)",
@@ -3963,8 +4072,8 @@ with tab9:
                 return "-"
             out = bool(row["Out_of_Range"].iloc[0])
             if client_lang_code == "ja":
-                return "基準範囲外" if out else "健康な範囲内"
-            return "Outside reference" if out else "Within reference"
+                return "正常範囲外" if out else "正常範囲内"
+            return "Outside normal range" if out else "Within normal range"
  
         for var in ["hip_flexion_r", "knee_angle_r", "ankle_angle_r"]:
             row = comparison_df[comparison_df["Variable"] == var]
