@@ -3322,7 +3322,7 @@ with tab9:
         "レポート言語 / Report Language",
         ["日本語", "English"],
         horizontal=True,
-        key="client_lang_radio"
+        key="sitstand_client_lang_radio"
     )
     client_lang_code = "ja" if client_lang_choice == "日本語" else "en"
  
@@ -3372,15 +3372,15 @@ with tab9:
     client_col1, client_col2, client_col3 = st.columns(3)
     with client_col1:
         client_subject_name = st.text_input(
-            CUI["subject_name"], value="", key="client_subject_name_input"
+            CUI["subject_name"], value="", key="sitstand_client_subject_name_input"
         )
     with client_col2:
         client_exam_date = st.text_input(
-            CUI["exam_date"], value="", key="client_exam_date_input"
+            CUI["exam_date"], value="", key="sitstand_client_exam_date_input"
         )
     with client_col3:
         client_examiner_name = st.text_input(
-            CUI["examiner"], value="", key="client_examiner_name_input"
+            CUI["examiner"], value="", key="sitstand_client_examiner_name_input"
         )
  
     JOINT_LABEL = {
@@ -3400,7 +3400,7 @@ with tab9:
         },
     }
     JOINT_SIMPLE_JA = {"Hip": "股関節", "Knee": "ひざ", "Ankle": "足首"}
-
+ 
     def build_healthy_diff_items(comparison_df, top_n=3, min_diff=3.0):
         """正常範囲から外れた項目を、差が大きい順に最大 top_n 件返す"""
         items = []
@@ -3421,7 +3421,7 @@ with tab9:
                           "diff": diff, "direction": direction, "rel": diff / width})
         items.sort(key=lambda d: d["rel"], reverse=True)
         return items[:top_n]
-
+ 
     def generate_healthy_diff_comment(items, lang_code):
         JL = JOINT_LABEL[lang_code]
         if not items:
@@ -3603,34 +3603,34 @@ with tab9:
             return "\n".join(lines)
  
     st.markdown(f"#### {CUI['comment_heading']}")
-    if "client_report_comment" not in st.session_state:
-        st.session_state["client_report_comment"] = ""
-    if st.button(CUI["auto_generate_button"], key="client_report_auto_comment_btn"):
-        st.session_state["client_report_comment"] = generate_client_auto_comment(
+    if "sitstand_client_report_comment" not in st.session_state:
+        st.session_state["sitstand_client_report_comment"] = ""
+    if st.button(CUI["auto_generate_button"], key="sitstand_client_report_auto_comment_btn"):
+        st.session_state["sitstand_client_report_comment"] = generate_client_auto_comment(
             client_lang_code, overall_score, mobility_score, stability_score, symmetry_score, compensation_score,
             asymmetry_results, comparison_df, lumbar_compensation, pelvis_compensation, pelvis_rotation_rom
         )
     st.caption(CUI["auto_generate_caption"])
     client_comment = st.text_area(
         CUI["comment_label"],
-        key="client_report_comment",
+        key="sitstand_client_report_comment",
         height=150
     )
-
+ 
     st.markdown(f"#### {CUI['healthy_heading']}")
-    include_healthy_diff = st.checkbox(CUI["healthy_include"], value=True, key="client_include_healthy_diff")
-    if "client_healthy_diff_comment" not in st.session_state:
-        st.session_state["client_healthy_diff_comment"] = ""
-    if st.button(CUI["healthy_auto_button"], key="client_healthy_diff_auto_btn", disabled=not include_healthy_diff):
-        st.session_state["client_healthy_diff_comment"] = generate_healthy_diff_comment(
+    include_healthy_diff = st.checkbox(CUI["healthy_include"], value=True, key="sitstand_client_include_healthy_diff")
+    if "sitstand_client_healthy_diff_comment" not in st.session_state:
+        st.session_state["sitstand_client_healthy_diff_comment"] = ""
+    if st.button(CUI["healthy_auto_button"], key="sitstand_client_healthy_diff_auto_btn", disabled=not include_healthy_diff):
+        st.session_state["sitstand_client_healthy_diff_comment"] = generate_healthy_diff_comment(
             build_healthy_diff_items(comparison_df), client_lang_code
         )
     healthy_diff_comment = st.text_area(
-        CUI["healthy_label"], key="client_healthy_diff_comment",
+        CUI["healthy_label"], key="sitstand_client_healthy_diff_comment",
         height=130, disabled=not include_healthy_diff
     )
  
-    if st.button(CUI["generate_button"], key="client_report_generate_btn"):
+    if st.button(CUI["generate_button"], key="sitstand_client_report_generate_btn"):
  
         from reportlab.platypus import PageBreak, HRFlowable
  
@@ -3691,7 +3691,7 @@ with tab9:
                 range_text = ", ".join(JOINT_LABEL["en"].get(v, v) for v in out_of_range_rows["Variable"].tolist())
                 concern_items.append((
                     "Range of motion outside reference",
-                    f"{range_text} fell outside the typical healthy range, suggesting possible "
+                    f"{range_text} fell outside the typical normal range, suggesting possible "
                     "restricted or excessive range of motion."
                 ))
         if concern_flags["stability"]:
@@ -3988,11 +3988,11 @@ with tab9:
         comment_html = escape(comment_display).replace("\n", "<br/>")
         elements_c.append(Paragraph(comment_html, c_body_style))
         elements_c.append(Spacer(1, 0.16 * cm))
-
+ 
         if include_healthy_diff:
             healthy_items = build_healthy_diff_items(comparison_df)
             elements_c.append(Paragraph(CUI["healthy_heading"], c_section_style))
-
+ 
             if healthy_items:
                 hdr = (["項目", "あなた", "正常範囲", "差"] if client_lang_code == "ja"
                        else ["Item", "You", "Normal Range", "Diff"])
@@ -4022,7 +4022,7 @@ with tab9:
                 ]))
                 elements_c.append(h_table)
                 elements_c.append(Spacer(1, 0.12 * cm))
-
+ 
             h_text = (healthy_diff_comment.strip() if healthy_diff_comment and healthy_diff_comment.strip()
                       else generate_healthy_diff_comment(healthy_items, client_lang_code))
             elements_c.append(Paragraph(escape(h_text).replace("\n", "<br/>"), c_body_style))
@@ -4171,7 +4171,7 @@ with tab9:
             data=client_report_buffer.getvalue(),
             file_name="Sit_Stand_Client_Report.pdf",
             mime="application/pdf",
-            key="client_report_download_btn"
+            key="sitstand_client_report_download_btn"
         )
         st.success(CUI["success_message"])
  
