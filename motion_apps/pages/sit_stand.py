@@ -17,6 +17,11 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import Image
 from reportlab.lib.enums import TA_CENTER
 from xml.sax.saxutils import escape
+from sit_stand_auto_comment import (
+    analyze_sit_stand_details,
+    generate_sit_stand_auto_comment as gen_clinical_comment,
+    generate_client_auto_comment as gen_client_comment,
+)
 pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
 pdfmetrics.registerFontFamily(
     "HeiseiKakuGo-W5",
@@ -433,6 +438,10 @@ def compare_subject_to_healthy(
 comparison_df = compare_subject_to_healthy(
     df_phase,
     healthy_rom_df
+)
+
+sit_stand_details = analyze_sit_stand_details(
+    df_phase, phase_summary_df, comparison_df, phase_order
 )
  
 # =========================
