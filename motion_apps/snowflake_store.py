@@ -113,7 +113,7 @@ def _write(conn, df, table):
         conn.write_pandas(df, table, auto_create_table=True, quote_identifiers=False)
 
 
-def _prepare_raw(df_phase, fhash, movement, fs=60):
+def _prepare_raw(df_phase, fhash, movement, fs=60, file_name=None):
     raw = df_phase.copy()
     if "time" in raw.columns:
         raw = raw.rename(columns={"time": "time_s"})
@@ -121,18 +121,19 @@ def _prepare_raw(df_phase, fhash, movement, fs=60):
         raw.insert(0, "time_s", [i / fs for i in range(len(raw))])
     raw.insert(0, "frame", range(len(raw)))
     raw.insert(0, "movement", movement)
+    raw.insert(0, "file_name", file_name)
     raw.insert(0, "file_hash", fhash)
     # 列名を Snowflake 向けに整える（大文字・英数字とアンダースコアのみ）
     raw.columns = [_clean_name(c) for c in raw.columns]
     return raw
 
 
-def save_raw(df_phase, fhash, movement):
+def save_raw(df_phase, fhash, movement, file_name=None):
     conn = get_conn()
     prev = _already_saved(conn, RAW_TABLE, fhash)
     if prev:
         return "exists", prev
-    raw = _prepare_raw(df_phase, fhash, movement)
+    raw = _prepare_raw(df_phase, fhash, movement, file_name=file_name)
     _ensure_columns(conn, RAW_TABLE, raw)
     _write(conn, raw, RAW_TABLE)
     return "saved", len(raw)
@@ -305,7 +306,7 @@ def render_save_section(df_phase, movement, summary=None, key_prefix=None):
         return
     try:
         with st.spinner("Snowflake に保存中..."):
-            status, n = save_raw(df_phase, fhash, movement)
+            status, n = save_raw(df_phase, fhash, movement, file_name=fname)
             s_status = None if status == "exists" else save_summary(summary, fhash, movement, profile)
         if status == "exists":
             if n == movement:
