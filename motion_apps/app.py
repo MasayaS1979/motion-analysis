@@ -214,6 +214,8 @@ uploaded_file = st.file_uploader(
 if uploaded_file is not None:
     st.success(t("app.upload_success"))
     st.session_state["uploaded_file"] = uploaded_file
+    from snowflake_store import render_upload_consent
+    render_upload_consent(uploaded_file)
  
 st.write("")
  
