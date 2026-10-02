@@ -3306,3 +3306,13 @@ with tab9:
             key="arm_client_report_download_btn"
         )
         st.success(CUI["success_message"])
+
+# =========================
+# Snowflake にデータを保存（同意がある場合のみ）
+# =========================
+from snowflake_store import render_save_from_page
+with tab1:
+    render_save_from_page(globals(), "Arm Flexion", [
+        "overall_score", "mobility_score", "symmetry_score",
+        "lumbar_score", "pelvis_score",
+    ])
