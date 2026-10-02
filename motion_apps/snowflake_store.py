@@ -57,9 +57,11 @@ def _already_saved(conn, table, fhash, movement):
     それ以外のエラーは握りつぶさずに止める（二重保存を防ぐため）。"""
     cur = conn.cursor()
     try:
+        # 接続の設定によって %(h)s 形式が使えないため、値を安全に埋め込む
+        h = "".join(c for c in str(fhash) if c in "0123456789abcdef")
+        m = str(movement).replace("'", "''")
         cur.execute(
-            f"SELECT COUNT(*) FROM {table} WHERE FILE_HASH = %(h)s AND MOVEMENT = %(m)s",
-            {"h": fhash, "m": movement},
+            f"SELECT COUNT(*) FROM {table} WHERE FILE_HASH = '{h}' AND MOVEMENT = '{m}'"
         )
         return cur.fetchone()[0] > 0
     except Exception as e:
