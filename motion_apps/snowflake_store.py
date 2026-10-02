@@ -117,15 +117,18 @@ def render_save_section(df_phase, movement, summary=None, key_prefix=None):
         key=f"{kp}_sf_consent",
     )
     # --- 対象者の基本情報（任意。未回答でも保存できる） ---
-    c1, c2 = st.columns(2)
-    with c1:
-        age_group = st.selectbox(
-            "年代（任意）",
-            ["未回答", "10代以下", "20代", "30代", "40代", "50代", "60代", "70代", "80代以上"],
-            key=f"{kp}_sf_age",
-        )
-    with c2:
-        sex = st.selectbox("性別（任意）", ["未回答", "男性", "女性", "その他"], key=f"{kp}_sf_sex")
+    age_group = st.radio(
+        "年代（任意）",
+        ["未回答", "10代以下", "20代", "30代", "40代", "50代", "60代", "70代", "80代以上"],
+        horizontal=True,
+        key=f"{kp}_sf_age",
+    )
+    sex = st.radio(
+        "性別（任意）",
+        ["未回答", "男性", "女性", "その他"],
+        horizontal=True,
+        key=f"{kp}_sf_sex",
+    )
     profile = {
         "AGE_GROUP": None if age_group == "未回答" else age_group,
         "SEX": None if sex == "未回答" else sex,
