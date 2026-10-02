@@ -167,41 +167,97 @@ def _file_id(uploaded):
     return f"{getattr(uploaded, 'name', '')}|{getattr(uploaded, 'size', '')}"
 
 
+CONSENT_TEXT = (
+    "- **保存するもの**：関節の角度などの動きの数値、解析スコア、年代・性別（任意）\n"
+    "- **保存しないもの**：氏名・連絡先・顔の映像など、個人を特定できる情報\n"
+    "- **利用目的**：動作評価の精度向上、正常値の研究、サービス改善\n"
+    "- **削除**：ご本人の申し出があれば、保存したデータを削除します"
+)
+
+
+def consent_and_upload(label="📁 測定ファイルをアップロード", **uploader_kwargs):
+    """app.py の st.file_uploader(...) の代わりに使う。
+    同意にチェックを入れるまでアップロードできない。別のファイル（次の人）を
+    アップロードしようとすると、同意をやり直す。"""
+    state = st.session_state.get(CONSENT_STATE) or {
+        "file_id": None, "consent": False, "age": "未回答", "sex": "未回答", "nonce": 0}
+    state.setdefault("nonce", 0)
+    kp = f"sf_gate_{state['nonce']}"
+
+    if st.session_state.pop("sf_gate_msg", None):
+        st.warning("新しい測定ファイルです。ご本人の同意を確認してから、もう一度アップロードしてください。")
+
+    with st.container(border=True):
+        st.markdown("#### ① データ保存の同意（研究・サービス改善用）")
+        with st.expander("📄 保存する内容と利用目的（必ずご本人に説明してください）"):
+            st.markdown(CONSENT_TEXT)
+        consent = st.checkbox(
+            "本人の同意を得たうえで、個人を特定しない測定データ（関節の動きの数値・スコア）を保存します",
+            value=state["consent"], key=f"{kp}_consent")
+        age = st.radio("年代（任意）", AGE_OPTIONS, horizontal=True,
+                       index=AGE_OPTIONS.index(state["age"]), key=f"{kp}_age")
+        sex = st.radio("性別（任意）", SEX_OPTIONS, horizontal=True,
+                       index=SEX_OPTIONS.index(state["sex"]), key=f"{kp}_sex")
+    state.update(consent=consent, age=age, sex=sex)
+
+    st.markdown("#### ② 測定ファイルのアップロード")
+    f = st.file_uploader(label, disabled=not consent, key=f"{kp}_uploader", **uploader_kwargs)
+
+    if not consent:
+        st.info("☝️ 同意にチェックを入れると、アップロードできるようになります。")
+        st.session_state["uploaded_file"] = None
+        state["file_id"] = None
+        st.session_state[CONSENT_STATE] = state
+        return None
+
+    if f is not None:
+        fid = _file_id(f)
+        if state["file_id"] is None:
+            state["file_id"] = fid                      # この同意をこのファイルに結びつける
+        elif state["file_id"] != fid:                   # 別のファイル＝次の人 → 同意をやり直す
+            st.session_state[CONSENT_STATE] = {
+                "file_id": None, "consent": False, "age": "未回答", "sex": "未回答",
+                "nonce": state["nonce"] + 1}
+            st.session_state["uploaded_file"] = None
+            st.session_state["sf_gate_msg"] = True
+            st.rerun()
+        st.session_state["uploaded_file"] = f
+    st.session_state[CONSENT_STATE] = state
+
+    current = st.session_state.get("uploaded_file")
+    if current is not None:
+        st.success(f"アップロード済み：{getattr(current, 'name', current)}　→ 左のメニューから動作を選んでください。")
+        if st.button("🔄 次の人の測定を始める（同意からやり直す）", key=f"{kp}_reset"):
+            st.session_state[CONSENT_STATE] = {
+                "file_id": None, "consent": False, "age": "未回答", "sex": "未回答",
+                "nonce": state["nonce"] + 1}
+            st.session_state["uploaded_file"] = None
+            st.rerun()
+    return current
+
+
 def render_upload_consent(uploaded=None):
-    """app.py のファイルアップロードの直後に呼ぶ。
-    ここで同意したファイルは、各動作ページを開いたときに自動で Snowflake に保存される。"""
+    """（旧方式）アップロード後に同意欄を出す。consent_and_upload を使う場合は不要。"""
     uploaded = uploaded if uploaded is not None else st.session_state.get("uploaded_file")
     if uploaded is None:
         return
     fid = _file_id(uploaded)
     saved = st.session_state.get(CONSENT_STATE) or {}
-    if saved.get("file_id") != fid:  # 新しいファイル → 未同意から
+    if saved.get("file_id") != fid:
         saved = {"file_id": fid, "consent": False, "age": "未回答", "sex": "未回答"}
-
     kp = "sf_up_" + hashlib.md5(fid.encode()).hexdigest()[:8]
     with st.container(border=True):
         st.markdown("#### データ保存の同意（研究・サービス改善用）")
         with st.expander("📄 保存する内容と利用目的（必ずご本人に説明してください）"):
-            st.markdown(
-                "- **保存するもの**：関節の角度などの動きの数値、解析スコア、年代・性別（任意）\n"
-                "- **保存しないもの**：氏名・連絡先・顔の映像など、個人を特定できる情報\n"
-                "- **利用目的**：動作評価の精度向上、正常値の研究、サービス改善\n"
-                "- **任意です**：同意しなくても、解析やレポート作成はこれまで通り使えます\n"
-                "- **削除**：ご本人の申し出があれば、保存したデータを削除します"
-            )
+            st.markdown(CONSENT_TEXT)
         consent = st.checkbox(
             "本人の同意を得たうえで、個人を特定しない測定データ（関節の動きの数値・スコア）を保存します",
-            value=saved["consent"], key=f"{kp}_consent",
-        )
+            value=saved["consent"], key=f"{kp}_consent")
         age = st.radio("年代（任意）", AGE_OPTIONS, horizontal=True,
                        index=AGE_OPTIONS.index(saved["age"]), key=f"{kp}_age")
         sex = st.radio("性別（任意）", SEX_OPTIONS, horizontal=True,
                        index=SEX_OPTIONS.index(saved["sex"]), key=f"{kp}_sex")
         st.session_state[CONSENT_STATE] = {"file_id": fid, "consent": consent, "age": age, "sex": sex}
-        if consent:
-            st.caption("✅ 解析ページを開くと、測定データとスコアが自動で保存されます。")
-        else:
-            st.caption("同意がない場合、データは保存されません（解析はそのまま使えます）。")
 
 
 def _current_consent():
