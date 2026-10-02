@@ -27,6 +27,7 @@ from single_sit_stand_auto_comment import (
     generate_single_sit_stand_auto_comment as gen_clinical_comment,
     generate_client_auto_comment as gen_client_comment,
 )
+from snowflake_store import render_save_section
  
 pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
 pdfmetrics.registerFontFamily(
