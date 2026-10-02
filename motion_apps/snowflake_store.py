@@ -104,6 +104,15 @@ def _ensure_columns(conn, table, df):
         cur.close()
 
 
+def _write(conn, df, table):
+    """日時を「数字」ではなく日時型で保存するため use_logical_type=True を付ける。"""
+    try:
+        conn.write_pandas(df, table, auto_create_table=True, quote_identifiers=False,
+                          use_logical_type=True)
+    except TypeError:  # 古いコネクタ用
+        conn.write_pandas(df, table, auto_create_table=True, quote_identifiers=False)
+
+
 def _prepare_raw(df_phase, fhash, movement, fs=60):
     raw = df_phase.copy()
     if "time" in raw.columns:
@@ -125,7 +134,7 @@ def save_raw(df_phase, fhash, movement):
         return "exists", prev
     raw = _prepare_raw(df_phase, fhash, movement)
     _ensure_columns(conn, RAW_TABLE, raw)
-    conn.write_pandas(raw, RAW_TABLE, auto_create_table=True, quote_identifiers=False)
+    _write(conn, raw, RAW_TABLE)
     return "saved", len(raw)
 
 
@@ -145,8 +154,7 @@ def save_summary(summary, fhash, movement, profile=None):
     row.update({k: v for k, v in (profile or {}).items() if v is not None})
     df_row = pd.DataFrame([row])
     _ensure_columns(conn, SUMMARY_TABLE, df_row)
-    conn.write_pandas(df_row, SUMMARY_TABLE,
-                      auto_create_table=True, quote_identifiers=False)
+    _write(conn, df_row, SUMMARY_TABLE)
     return "saved"
 
 
@@ -284,6 +292,10 @@ def render_save_section(df_phase, movement, summary=None, key_prefix=None):
         "AGE_GROUP": None if info["age"] == "未回答" else info["age"],
         "SEX": None if info["sex"] == "未回答" else info["sex"],
     }
+    uploaded = st.session_state.get("uploaded_file")
+    fname = getattr(uploaded, "name", None) or (os.path.basename(str(uploaded)) if uploaded else None)
+    if fname:
+        profile["FILE_NAME"] = fname
     kp = key_prefix or movement.replace(" ", "_").replace("-", "_").lower()
     fhash = data_hash_of(df_phase)
     done_key = f"{kp}_sf_saved_{fhash}"
