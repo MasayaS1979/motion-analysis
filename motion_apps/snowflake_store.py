@@ -11,6 +11,7 @@ Streamlit アプリから Snowflake に「生データ（時系列）」と「�
 """
 import datetime
 import hashlib
+import numbers
 import os
 import tempfile
 import uuid
@@ -72,6 +73,38 @@ def _already_saved(conn, table, fhash, movement):
         cur.close()
 
 
+def _clean_name(c):
+    return "".join(ch if ch.isalnum() else "_" for ch in str(c)).upper()
+
+
+def _ensure_columns(conn, table, df):
+    """動作ごとに列が違っても保存できるよう、足りない列をテーブルに追加する。"""
+    cur = conn.cursor()
+    try:
+        try:
+            cur.execute(f"SHOW COLUMNS IN TABLE {table}")
+        except Exception as e:
+            if "does not exist" in str(e):
+                return  # 初回：write_pandas がテーブルを作る
+            raise
+        existing = {row[2].upper() for row in cur.fetchall()}
+        for col in df.columns:
+            if col.upper() in existing:
+                continue
+            s = df[col].dropna()
+            if pd.api.types.is_datetime64_any_dtype(df[col]) or (
+                len(s) and isinstance(s.iloc[0], datetime.datetime)
+            ):
+                typ = "TIMESTAMP_NTZ"
+            elif pd.api.types.is_numeric_dtype(df[col]):
+                typ = "FLOAT"
+            else:
+                typ = "VARCHAR"
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typ}")
+    finally:
+        cur.close()
+
+
 def _prepare_raw(df_phase, fhash, movement, fs=60):
     raw = df_phase.copy()
     if "time" in raw.columns:
@@ -82,9 +115,7 @@ def _prepare_raw(df_phase, fhash, movement, fs=60):
     raw.insert(0, "movement", movement)
     raw.insert(0, "file_hash", fhash)
     # 列名を Snowflake 向けに整える（大文字・英数字とアンダースコアのみ）
-    raw.columns = [
-        "".join(ch if ch.isalnum() else "_" for ch in str(c)).upper() for c in raw.columns
-    ]
+    raw.columns = [_clean_name(c) for c in raw.columns]
     return raw
 
 
@@ -93,6 +124,7 @@ def save_raw(df_phase, fhash, movement):
     if _already_saved(conn, RAW_TABLE, fhash, movement):
         return "exists", 0
     raw = _prepare_raw(df_phase, fhash, movement)
+    _ensure_columns(conn, RAW_TABLE, raw)
     conn.write_pandas(raw, RAW_TABLE, auto_create_table=True, quote_identifiers=False)
     return "saved", len(raw)
 
@@ -104,10 +136,16 @@ def save_summary(summary, fhash, movement, profile=None):
     row = {"RECORD_ID": str(uuid.uuid4()),
            "CREATED_AT": datetime.datetime.utcnow(),
            "FILE_HASH": fhash, "MOVEMENT": movement}
-    row.update({k.upper(): (float(v) if isinstance(v, (int, float)) else v)
-                for k, v in (summary or {}).items()})
-    row.update(profile or {})
-    conn.write_pandas(pd.DataFrame([row]), SUMMARY_TABLE,
+    for k, v in (summary or {}).items():
+        if v is None:
+            continue  # 値が無い項目は保存しない（NULL のまま）
+        if isinstance(v, numbers.Number) and not isinstance(v, bool):
+            v = float(v)
+        row[_clean_name(k)] = v
+    row.update({k: v for k, v in (profile or {}).items() if v is not None})
+    df_row = pd.DataFrame([row])
+    _ensure_columns(conn, SUMMARY_TABLE, df_row)
+    conn.write_pandas(df_row, SUMMARY_TABLE,
                       auto_create_table=True, quote_identifiers=False)
     return "saved"
 
@@ -164,3 +202,26 @@ def render_save_section(df_phase, movement, summary=None, key_prefix=None):
             st.session_state[done_key] = True
         except Exception as e:
             st.error(f"保存に失敗しました：{e}")
+
+
+# ---------------------------------------------------------------
+# どのページでも使える簡単版：ページの変数を名前で探して保存する
+# ---------------------------------------------------------------
+DF_CANDIDATES = ("df_phase", "df", "df_raw", "df_all", "data")
+
+
+def render_save_from_page(page_globals, movement, summary_vars=(), df_names=DF_CANDIDATES):
+    """page_globals には各ページで globals() を渡す。
+    summary_vars の変数がページに無い場合は、その項目だけ保存しない（エラーにしない）。"""
+    df = None
+    for name in df_names:
+        obj = page_globals.get(name)
+        if isinstance(obj, pd.DataFrame) and len(obj):
+            df = obj
+            break
+    if df is None:
+        if st.session_state.get("uploaded_file") is not None:
+            st.warning("保存用の測定データ（DataFrame）が見つかりませんでした。")
+        return
+    summary = {v: page_globals.get(v) for v in summary_vars}
+    render_save_section(df, movement=movement, summary=summary)
