@@ -3539,4 +3539,14 @@ with tab9:
             key="client_report_download_btn"
         )
         st.success(CUI["success_message"])
+
+# =========================
+# Snowflake にデータを保存（同意がある場合のみ）
+# =========================
+from snowflake_store import render_save_from_page
+with tab1:
+    render_save_from_page(globals(), "Squat", [
+        "overall_score", "mobility_score", "stability_score", "symmetry_score",
+        "compensation_score", "hip_rom", "knee_rom", "ankle_rom",
+    ])
  
