@@ -226,7 +226,7 @@ def consent_and_upload(label="📁 測定ファイルをアップロード", **u
 
     current = st.session_state.get("uploaded_file")
     if current is not None:
-        st.success(f"アップロード済み：{getattr(current, 'name', current)}　→ 左のメニューから動作を選んでください。")
+        st.success(f"アップロード済み：{getattr(current, 'name', current)}　→ 下の解析ページから動作を選んでください。")
         if st.button("🔄 次の人の測定を始める（同意からやり直す）", key=f"{kp}_reset"):
             st.session_state[CONSENT_STATE] = {
                 "file_id": None, "consent": False, "age": "未回答", "sex": "未回答",
