@@ -181,6 +181,14 @@ def render_upload_consent(uploaded=None):
     kp = "sf_up_" + hashlib.md5(fid.encode()).hexdigest()[:8]
     with st.container(border=True):
         st.markdown("#### データ保存の同意（研究・サービス改善用）")
+        with st.expander("📄 保存する内容と利用目的（必ずご本人に説明してください）"):
+            st.markdown(
+                "- **保存するもの**：関節の角度などの動きの数値、解析スコア、年代・性別（任意）\n"
+                "- **保存しないもの**：氏名・連絡先・顔の映像など、個人を特定できる情報\n"
+                "- **利用目的**：動作評価の精度向上、正常値の研究、サービス改善\n"
+                "- **任意です**：同意しなくても、解析やレポート作成はこれまで通り使えます\n"
+                "- **削除**：ご本人の申し出があれば、保存したデータを削除します"
+            )
         consent = st.checkbox(
             "本人の同意を得たうえで、個人を特定しない測定データ（関節の動きの数値・スコア）を保存します",
             value=saved["consent"], key=f"{kp}_consent",
