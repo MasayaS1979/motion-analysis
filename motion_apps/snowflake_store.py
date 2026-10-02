@@ -53,21 +53,20 @@ def data_hash_of(df):
     return h.hexdigest()
 
 
-def _already_saved(conn, table, fhash, movement):
-    """保存済みなら True。テーブルが無い（初回）ときだけ False。
-    それ以外のエラーは握りつぶさずに止める（二重保存を防ぐため）。"""
+def _already_saved(conn, table, fhash, movement=None):
+    """同じ測定データがすでにあれば、その動作名を返す（無ければ None）。
+    動作に関係なく、同じデータは1回しか保存しない。
+    テーブルが無い（初回）ときだけ None。それ以外のエラーは止める（二重保存を防ぐため）。"""
     cur = conn.cursor()
     try:
         # 接続の設定によって %(h)s 形式が使えないため、値を安全に埋め込む
         h = "".join(c for c in str(fhash) if c in "0123456789abcdef")
-        m = str(movement).replace("'", "''")
-        cur.execute(
-            f"SELECT COUNT(*) FROM {table} WHERE FILE_HASH = '{h}' AND MOVEMENT = '{m}'"
-        )
-        return cur.fetchone()[0] > 0
+        cur.execute(f"SELECT MOVEMENT FROM {table} WHERE FILE_HASH = '{h}' LIMIT 1")
+        row = cur.fetchone()
+        return (row[0] or "不明") if row else None
     except Exception as e:
         if "does not exist" in str(e):
-            return False
+            return None
         raise
     finally:
         cur.close()
@@ -121,8 +120,9 @@ def _prepare_raw(df_phase, fhash, movement, fs=60):
 
 def save_raw(df_phase, fhash, movement):
     conn = get_conn()
-    if _already_saved(conn, RAW_TABLE, fhash, movement):
-        return "exists", 0
+    prev = _already_saved(conn, RAW_TABLE, fhash)
+    if prev:
+        return "exists", prev
     raw = _prepare_raw(df_phase, fhash, movement)
     _ensure_columns(conn, RAW_TABLE, raw)
     conn.write_pandas(raw, RAW_TABLE, auto_create_table=True, quote_identifiers=False)
@@ -131,7 +131,7 @@ def save_raw(df_phase, fhash, movement):
 
 def save_summary(summary, fhash, movement, profile=None):
     conn = get_conn()
-    if _already_saved(conn, SUMMARY_TABLE, fhash, movement):
+    if _already_saved(conn, SUMMARY_TABLE, fhash):
         return "exists"
     row = {"RECORD_ID": str(uuid.uuid4()),
            "CREATED_AT": datetime.datetime.utcnow(),
@@ -294,9 +294,14 @@ def render_save_section(df_phase, movement, summary=None, key_prefix=None):
     try:
         with st.spinner("Snowflake に保存中..."):
             status, n = save_raw(df_phase, fhash, movement)
-            s_status = save_summary(summary, fhash, movement, profile)
+            s_status = None if status == "exists" else save_summary(summary, fhash, movement, profile)
         if status == "exists":
-            msg = "このデータは保存済みです（重複して保存はしません）。"
+            if n == movement:
+                msg = "このデータは保存済みです（重複して保存はしません）。"
+            else:
+                msg = (f"このデータはすでに「{n}」として保存済みのため、保存しませんでした。"
+                       "（同じデータは1回だけ保存します）")
+                st.warning(f"⚠️ {msg}")
         else:
             msg = f"生データ {n} フレームと要約を保存しました。" if s_status == "saved" \
                 else f"生データ {n} フレームを保存しました。"
