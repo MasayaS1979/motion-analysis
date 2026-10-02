@@ -151,57 +151,95 @@ def save_summary(summary, fhash, movement, profile=None):
 
 
 # ---------------------------------------------------------------
-# ページに貼る UI（同意チェック＋保存ボタン）
+# アップロード画面（app.py）に置く：同意・年代・性別の入力
 # ---------------------------------------------------------------
-def render_save_section(df_phase, movement, summary=None, key_prefix=None):
-    uploaded = st.session_state.get("uploaded_file")
+AGE_OPTIONS = ["未回答", "10代以下", "20代", "30代", "40代", "50代", "60代", "70代", "80代以上"]
+SEX_OPTIONS = ["未回答", "男性", "女性", "その他"]
+CONSENT_STATE = "sf_upload_consent"
+
+
+def _file_id(uploaded):
+    """アップロードされたファイルの目印（名前＋サイズ）。別ファイルなら同意をやり直す。"""
+    if uploaded is None:
+        return None
+    if isinstance(uploaded, (str, os.PathLike)):
+        return str(uploaded)
+    return f"{getattr(uploaded, 'name', '')}|{getattr(uploaded, 'size', '')}"
+
+
+def render_upload_consent(uploaded=None):
+    """app.py のファイルアップロードの直後に呼ぶ。
+    ここで同意したファイルは、各動作ページを開いたときに自動で Snowflake に保存される。"""
+    uploaded = uploaded if uploaded is not None else st.session_state.get("uploaded_file")
     if uploaded is None:
         return
-    kp = key_prefix or movement.replace(" ", "_").replace("-", "_").lower()
+    fid = _file_id(uploaded)
+    saved = st.session_state.get(CONSENT_STATE) or {}
+    if saved.get("file_id") != fid:  # 新しいファイル → 未同意から
+        saved = {"file_id": fid, "consent": False, "age": "未回答", "sex": "未回答"}
 
-    st.markdown("---")
-    st.markdown("#### データ保存（研究・サービス改善用）")
-    consent = st.checkbox(
-        "本人の同意を得たうえで、個人を特定しない測定データ（関節の動きの数値・スコア）を保存します",
-        key=f"{kp}_sf_consent",
-    )
-    # --- 対象者の基本情報（任意。未回答でも保存できる） ---
-    age_group = st.radio(
-        "年代（任意）",
-        ["未回答", "10代以下", "20代", "30代", "40代", "50代", "60代", "70代", "80代以上"],
-        horizontal=True,
-        key=f"{kp}_sf_age",
-    )
-    sex = st.radio(
-        "性別（任意）",
-        ["未回答", "男性", "女性", "その他"],
-        horizontal=True,
-        key=f"{kp}_sf_sex",
-    )
+    kp = "sf_up_" + hashlib.md5(fid.encode()).hexdigest()[:8]
+    with st.container(border=True):
+        st.markdown("#### データ保存の同意（研究・サービス改善用）")
+        consent = st.checkbox(
+            "本人の同意を得たうえで、個人を特定しない測定データ（関節の動きの数値・スコア）を保存します",
+            value=saved["consent"], key=f"{kp}_consent",
+        )
+        age = st.radio("年代（任意）", AGE_OPTIONS, horizontal=True,
+                       index=AGE_OPTIONS.index(saved["age"]), key=f"{kp}_age")
+        sex = st.radio("性別（任意）", SEX_OPTIONS, horizontal=True,
+                       index=SEX_OPTIONS.index(saved["sex"]), key=f"{kp}_sex")
+        st.session_state[CONSENT_STATE] = {"file_id": fid, "consent": consent, "age": age, "sex": sex}
+        if consent:
+            st.caption("✅ 解析ページを開くと、測定データとスコアが自動で保存されます。")
+        else:
+            st.caption("同意がない場合、データは保存されません（解析はそのまま使えます）。")
+
+
+def _current_consent():
+    """今アップロードされているファイルに対する同意内容。無ければ None。"""
+    info = st.session_state.get(CONSENT_STATE)
+    uploaded = st.session_state.get("uploaded_file")
+    if not info or uploaded is None or info.get("file_id") != _file_id(uploaded):
+        return None
+    return info
+
+
+# ---------------------------------------------------------------
+# 各ページの最後で呼ぶ：同意済みなら自動保存（ボタン不要）
+# ---------------------------------------------------------------
+def render_save_section(df_phase, movement, summary=None, key_prefix=None):
+    if st.session_state.get("uploaded_file") is None:
+        return
+    info = _current_consent()
+    if not info or not info.get("consent"):
+        st.caption("💾 データ保存：同意なし（保存していません）。アップロード画面で変更できます。")
+        return
+
     profile = {
-        "AGE_GROUP": None if age_group == "未回答" else age_group,
-        "SEX": None if sex == "未回答" else sex,
+        "AGE_GROUP": None if info["age"] == "未回答" else info["age"],
+        "SEX": None if info["sex"] == "未回答" else info["sex"],
     }
-
+    kp = key_prefix or movement.replace(" ", "_").replace("-", "_").lower()
     fhash = data_hash_of(df_phase)
     done_key = f"{kp}_sf_saved_{fhash}"
 
-    if st.button("💾 Snowflake に保存", key=f"{kp}_sf_save_btn", disabled=not consent):
-        if st.session_state.get(done_key):
-            st.info("このデータはこの画面ですでに保存済みです。")
-            return
-        try:
-            with st.spinner("保存中..."):
-                status, n = save_raw(df_phase, fhash, movement)
-                s_status = save_summary(summary, fhash, movement, profile)
-            if status == "exists":
-                st.info("同じデータがすでに登録されているため、保存しませんでした。")
-            else:
-                st.success(f"生データ {n} フレームを保存しました。"
-                           + (" 要約も保存しました。" if s_status == "saved" else ""))
-            st.session_state[done_key] = True
-        except Exception as e:
-            st.error(f"保存に失敗しました：{e}")
+    if st.session_state.get(done_key):
+        st.caption(f"💾 データ保存：{st.session_state[done_key]}")
+        return
+    try:
+        with st.spinner("Snowflake に保存中..."):
+            status, n = save_raw(df_phase, fhash, movement)
+            s_status = save_summary(summary, fhash, movement, profile)
+        if status == "exists":
+            msg = "このデータは保存済みです（重複して保存はしません）。"
+        else:
+            msg = f"生データ {n} フレームと要約を保存しました。" if s_status == "saved" \
+                else f"生データ {n} フレームを保存しました。"
+        st.session_state[done_key] = msg
+        st.caption(f"💾 データ保存：{msg}")
+    except Exception as e:
+        st.error(f"Snowflake への保存に失敗しました：{e}")
 
 
 # ---------------------------------------------------------------
