@@ -4052,18 +4052,18 @@ with tab9:
 # =========================
 # Snowflake にデータを保存（同意がある場合のみ）
 # =========================
-render_save_section(
-    df_phase,
-    movement="Single Sit-to-Stand",
-    summary={
-        "SIDE": ANALYSIS_SIDE,
-        "OVERALL_SCORE": overall_score,
-        "MOBILITY_SCORE": mobility_score,
-        "STABILITY_SCORE": stability_score,
-        "COMPENSATION_SCORE": compensation_score,
-        "HIP_ROM": hip_rom,
-        "KNEE_ROM": knee_rom,
-        "ANKLE_ROM": ankle_rom,
-    },
-)
- 
+with tab1:
+    render_save_section(
+        df_phase,
+        movement="Single Sit-to-Stand",
+        summary={
+            "SIDE": ANALYSIS_SIDE,
+            "OVERALL_SCORE": overall_score,
+            "MOBILITY_SCORE": mobility_score,
+            "STABILITY_SCORE": stability_score,
+            "COMPENSATION_SCORE": compensation_score,
+            "HIP_ROM": hip_rom,
+            "KNEE_ROM": knee_rom,
+            "ANKLE_ROM": ankle_rom,
+        },
+    )
