@@ -3709,4 +3709,15 @@ with tab9:
             key="gait_client_report_download_btn"
         )
         st.success(CUI["success_message"])
+
+# =========================
+# Snowflake にデータを保存（同意がある場合のみ）
+# =========================
+from snowflake_store import render_save_from_page
+with tab1:
+    render_save_from_page(globals(), "Gait", [
+        "overall_score", "mobility_score", "symmetry_score", "cadence_score",
+        "pelvic_ml_score", "lumbar_extension_score",
+        "lumbar_extension_rom", "pelvis_tilt_rom", "pelvis_rotation_rom", "pelvic_obliquity_rom",
+    ])
  
