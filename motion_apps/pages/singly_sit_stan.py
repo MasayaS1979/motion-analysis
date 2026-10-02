@@ -22,6 +22,11 @@ from single_sit_stand_auto_comment import (
     generate_single_sit_stand_auto_comment as gen_clinical_comment,
     generate_client_auto_comment as gen_client_comment,
 )
+from single_sit_stand_auto_comment import (
+    analyze_single_sit_stand_details,
+    generate_single_sit_stand_auto_comment as gen_clinical_comment,
+    generate_client_auto_comment as gen_client_comment,
+)
  
 pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
 pdfmetrics.registerFontFamily(
@@ -4041,4 +4046,23 @@ with tab9:
             key="single_client_report_download_btn"
         )
         st.success(CUI["success_message"])
+
+
+# =========================
+# Snowflake にデータを保存（同意がある場合のみ）
+# =========================
+render_save_section(
+    df_phase,
+    movement="Single Sit-to-Stand",
+    summary={
+        "SIDE": ANALYSIS_SIDE,
+        "OVERALL_SCORE": overall_score,
+        "MOBILITY_SCORE": mobility_score,
+        "STABILITY_SCORE": stability_score,
+        "COMPENSATION_SCORE": compensation_score,
+        "HIP_ROM": hip_rom,
+        "KNEE_ROM": knee_rom,
+        "ANKLE_ROM": ankle_rom,
+    },
+)
  
