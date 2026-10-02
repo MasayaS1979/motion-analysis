@@ -205,17 +205,9 @@ st.write("")
 # File Upload
 # =========================
 st.subheader(t("app.upload_header"))
- 
-uploaded_file = st.file_uploader(
-    t("app.upload_label"),
-    type=["csv", "xlsx"]
-)
- 
-if uploaded_file is not None:
-    st.success(t("app.upload_success"))
-    st.session_state["uploaded_file"] = uploaded_file
-    from snowflake_store import render_upload_consent
-    render_upload_consent(uploaded_file)
+
+from snowflake_store import consent_and_upload
+uploaded_file = consent_and_upload(t("app.upload_label"), type=["csv", "xlsx"])
  
 st.write("")
  
